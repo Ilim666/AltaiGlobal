@@ -26,7 +26,7 @@ def clients():
         phone = request.form.get("phone", "").strip()
         address = request.form.get("address", "").strip()
         if not name or not phone or not address:
-            abort(400, description="name, phone and address are required")
+            abort(400, description="name, phone, and address are required")
 
         client = Client(
             name=name,
@@ -49,7 +49,7 @@ def edit_client(id):
         phone = request.form.get("phone", "").strip()
         address = request.form.get("address", "").strip()
         if not name or not phone or not address:
-            abort(400, description="name, phone and address are required")
+            abort(400, description="name, phone, and address are required")
 
         client.name = name
         client.phone = phone

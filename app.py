@@ -2,6 +2,7 @@ import re
 
 from flask import Flask, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
@@ -148,6 +149,11 @@ def delete_client(id):
 
 if __name__ == "__main__":
     with app.app_context():
-        db.drop_all()
+        expected_columns = {"id", "vehicle_number", "full_name", "phone_number", "vehicle_brand", "vehicle_color", "inn", "notes"}
+        inspector = inspect(db.engine)
+        if inspector.has_table("client"):
+            current_columns = {column["name"] for column in inspector.get_columns("client")}
+            if current_columns != expected_columns:
+                db.drop_all()
         db.create_all()
     app.run()

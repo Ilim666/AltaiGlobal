@@ -57,7 +57,9 @@
                             <td>{{ client.address }}</td>
                             <td>
                                 <a href="/client/edit/{{ client.id }}" class="btn btn-sm btn-warning">Редактировать</a>
-                                <a href="/client/delete/{{ client.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Вы уверены?')">Удалить</a>
+                                <form method="POST" action="/client/delete/{{ client.id }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Вы уверены?')">Удалить</button>
+                                </form>
                             </td>
                         </tr>
                         {% endfor %}

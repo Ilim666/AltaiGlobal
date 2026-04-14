@@ -1,4 +1,4 @@
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, abort, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
@@ -22,10 +22,16 @@ def index():
 @app.route("/clients", methods=["GET", "POST"])
 def clients():
     if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        address = request.form.get("address", "").strip()
+        if not name or not phone or not address:
+            abort(400, description="name, phone and address are required")
+
         client = Client(
-            name=request.form["name"].strip(),
-            phone=request.form["phone"].strip(),
-            address=request.form["address"].strip(),
+            name=name,
+            phone=phone,
+            address=address,
         )
         db.session.add(client)
         db.session.commit()
@@ -39,16 +45,22 @@ def clients():
 def edit_client(id):
     client = Client.query.get_or_404(id)
     if request.method == "POST":
-        client.name = request.form["name"].strip()
-        client.phone = request.form["phone"].strip()
-        client.address = request.form["address"].strip()
+        name = request.form.get("name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        address = request.form.get("address", "").strip()
+        if not name or not phone or not address:
+            abort(400, description="name, phone and address are required")
+
+        client.name = name
+        client.phone = phone
+        client.address = address
         db.session.commit()
         return redirect(url_for("clients"))
 
     return render_template("edit_client.html", client=client)
 
 
-@app.route("/client/delete/<int:id>")
+@app.route("/client/delete/<int:id>", methods=["POST"])
 def delete_client(id):
     client = Client.query.get_or_404(id)
     db.session.delete(client)
@@ -59,4 +71,4 @@ def delete_client(id):
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run()

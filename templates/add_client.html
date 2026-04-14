@@ -12,18 +12,45 @@
                 <h5 class="mb-0">Добавить нового клиента</h5>
             </div>
             <div class="card-body">
+                {% if errors %}
+                <div class="alert alert-danger">
+                    <ul class="mb-0">
+                        {% for error in errors %}
+                        <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
                 <form method="POST">
                     <div class="mb-3">
-                        <label for="name" class="form-label">Имя</label>
-                        <input type="text" class="form-control" id="name" name="name" required>
+                        <label for="vehicle_number" class="form-label">Номер машины</label>
+                        <input type="text" class="form-control" id="vehicle_number" name="vehicle_number" value="{{ form_data.vehicle_number or '' }}" required>
                     </div>
                     <div class="mb-3">
-                        <label for="phone" class="form-label">Телефон</label>
-                        <input type="text" class="form-control" id="phone" name="phone" required>
+                        <label for="full_name" class="form-label">ФИО</label>
+                        <input type="text" class="form-control" id="full_name" name="full_name" value="{{ form_data.full_name or '' }}" required>
                     </div>
                     <div class="mb-3">
-                        <label for="address" class="form-label">Адрес</label>
-                        <input type="text" class="form-control" id="address" name="address" required>
+                        <label for="phone_number" class="form-label">Номер телефона</label>
+                        <input type="text" class="form-control" id="phone_number" name="phone_number" value="{{ form_data.phone_number or '' }}" required inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" placeholder="9123456789">
+                        <div class="form-text">Только цифры, ровно 10 символов. Отображение в списке: 9123-456-78.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="vehicle_brand" class="form-label">Марка машины</label>
+                        <input type="text" class="form-control" id="vehicle_brand" name="vehicle_brand" value="{{ form_data.vehicle_brand or '' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="vehicle_color" class="form-label">Цвет машины</label>
+                        <input type="text" class="form-control" id="vehicle_color" name="vehicle_color" value="{{ form_data.vehicle_color or '' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="inn" class="form-label">ИНН</label>
+                        <input type="text" class="form-control" id="inn" name="inn" value="{{ form_data.inn or '' }}" required inputmode="numeric" pattern="[0-9]{14}" minlength="14" maxlength="14" placeholder="12345678901234">
+                        <div class="form-text">Только цифры, ровно 14 символов.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Примечание</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3">{{ form_data.notes or '' }}</textarea>
                     </div>
                     <button type="submit" class="btn btn-success">Добавить</button>
                 </form>

@@ -15,9 +15,13 @@
             <thead>
                 <tr>
                     <th>ID</th>
-                    <th>Имя</th>
-                    <th>Телефон</th>
-                    <th>Адрес</th>
+                    <th>Номер машины</th>
+                    <th>ФИО</th>
+                    <th>Номер телефона</th>
+                    <th>Марка машины</th>
+                    <th>Цвет машины</th>
+                    <th>ИНН</th>
+                    <th>Примечание</th>
                     <th>Действия</th>
                 </tr>
             </thead>
@@ -25,9 +29,13 @@
                 {% for client in clients %}
                 <tr>
                     <td>{{ client.id }}</td>
-                    <td>{{ client.name }}</td>
-                    <td>{{ client.phone }}</td>
-                    <td>{{ client.address }}</td>
+                    <td>{{ client.vehicle_number }}</td>
+                    <td>{{ client.full_name }}</td>
+                    <td>{{ client.formatted_phone }}</td>
+                    <td>{{ client.vehicle_brand }}</td>
+                    <td>{{ client.vehicle_color }}</td>
+                    <td>{{ client.inn }}</td>
+                    <td>{{ client.notes or "-" }}</td>
                     <td>
                         <a href="/client/edit/{{ client.id }}" class="btn btn-sm btn-warning">Редактировать</a>
                         <form method="POST" action="/client/delete/{{ client.id }}" class="d-inline">

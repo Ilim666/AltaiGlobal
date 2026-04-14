@@ -1,4 +1,4 @@
-from flask import Flask, abort, redirect, render_template, request, url_for
+from flask import Flask, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
@@ -26,7 +26,7 @@ def clients():
         phone = request.form.get("phone", "").strip()
         address = request.form.get("address", "").strip()
         if not name or not phone or not address:
-            abort(400, description="name, phone, and address are required")
+            return redirect(url_for("clients"))
 
         client = Client(
             name=name,
@@ -49,7 +49,7 @@ def edit_client(id):
         phone = request.form.get("phone", "").strip()
         address = request.form.get("address", "").strip()
         if not name or not phone or not address:
-            abort(400, description="name, phone, and address are required")
+            return redirect(url_for("edit_client", id=id))
 
         client.name = name
         client.phone = phone

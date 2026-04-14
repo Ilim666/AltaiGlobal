@@ -5,29 +5,69 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}AltaiGlobal{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background: #1f2937;
+            color: #fff;
+            padding: 1.5rem 1rem;
+            flex-shrink: 0;
+        }
+        .sidebar-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+        .sidebar .nav-link {
+            color: #d1d5db;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            padding: 0.65rem 0.9rem;
+            transition: all 0.2s ease;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: #fff;
+            background: #374151;
+        }
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+        }
+        @media (max-width: 768px) {
+            .app-layout {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                padding: 1rem;
+            }
+            .main-content {
+                padding: 1rem;
+            }
+        }
+    </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/">AltaiGlobal</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Главная</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/clients">Клиенты</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-title">AltaiGlobal</div>
+            <nav class="nav flex-column">
+                <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">Добавление клиента</a>
+                <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">Клиенты</a>
+            </nav>
+        </aside>
 
-    <div class="container mt-4">
-        {% block content %}{% endblock %}
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>

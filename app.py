@@ -16,17 +16,17 @@ class Client(db.Model):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return redirect(url_for("add_client"))
 
 
-@app.route("/clients", methods=["GET", "POST"])
-def clients():
+@app.route("/add-client", methods=["GET", "POST"])
+def add_client():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         phone = request.form.get("phone", "").strip()
         address = request.form.get("address", "").strip()
         if not name or not phone or not address:
-            return redirect(url_for("clients"))
+            return redirect(url_for("add_client"))
 
         client = Client(
             name=name,
@@ -37,6 +37,12 @@ def clients():
         db.session.commit()
         return redirect(url_for("clients"))
 
+
+    return render_template("add_client.html")
+
+
+@app.route("/clients", methods=["GET"])
+def clients():
     all_clients = Client.query.order_by(Client.id.desc()).all()
     return render_template("clients.html", clients=all_clients)
 

@@ -23,10 +23,17 @@ def index():
 @app.route('/clients', methods=['GET', 'POST'])
 def clients():
     if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        phone = request.form.get('phone', '').strip()
+        address = request.form.get('address', '').strip()
+
+        if not (name and phone and address):
+            return redirect(url_for('clients'))
+
         new_client = Client(
-            name=request.form['name'],
-            phone=request.form['phone'],
-            address=request.form['address']
+            name=name,
+            phone=phone,
+            address=address
         )
         db.session.add(new_client)
         db.session.commit()
@@ -41,9 +48,16 @@ def edit_client(id):
     client = Client.query.get_or_404(id)
 
     if request.method == 'POST':
-        client.name = request.form['name']
-        client.phone = request.form['phone']
-        client.address = request.form['address']
+        name = request.form.get('name', '').strip()
+        phone = request.form.get('phone', '').strip()
+        address = request.form.get('address', '').strip()
+
+        if not (name and phone and address):
+            return redirect(url_for('edit_client', id=id))
+
+        client.name = name
+        client.phone = phone
+        client.address = address
         db.session.commit()
         return redirect(url_for('clients'))
 
@@ -60,4 +74,4 @@ def delete_client(id):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run(debug=False)

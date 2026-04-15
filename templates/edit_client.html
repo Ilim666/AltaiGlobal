@@ -6,27 +6,186 @@
 <h1>Редактирование клиента</h1>
 
 <div class="row">
-    <div class="col-md-6">
+    <div class="col-lg-7 col-xl-6">
         <div class="card">
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" id="client-form" novalidate>
                     <div class="mb-3">
-                        <label for="name" class="form-label">Имя</label>
-                        <input type="text" class="form-control" id="name" name="name" value="{{ client.name }}" required>
+                        <label for="vehicle_number" class="form-label">Номер машины</label>
+                        <input type="text" class="form-control" id="vehicle_number" name="vehicle_number" value="{{ client.vehicle_number }}" required>
+                        <div class="form-text" id="vehicle-number-status"></div>
                     </div>
                     <div class="mb-3">
-                        <label for="phone" class="form-label">Телефон</label>
-                        <input type="text" class="form-control" id="phone" name="phone" value="{{ client.phone }}" required>
+                        <label for="full_name" class="form-label">ФИО</label>
+                        <input type="text" class="form-control" id="full_name" name="full_name" value="{{ client.full_name }}" required>
+                        <div class="form-text" id="full-name-status"></div>
                     </div>
                     <div class="mb-3">
-                        <label for="address" class="form-label">Адрес</label>
-                        <input type="text" class="form-control" id="address" name="address" value="{{ client.address }}" required>
+                        <label for="phone_number" class="form-label">Номер телефона</label>
+                        <input type="text" class="form-control" id="phone_number" name="phone_number" value="{{ client.phone_number }}" required>
+                        <div class="form-text" id="phone-preview"></div>
+                        <div class="form-text" id="phone-status"></div>
                     </div>
-                    <button type="submit" class="btn btn-success">Сохранить</button>
+                    <div class="mb-3">
+                        <label for="vehicle_brand" class="form-label">Марка машины</label>
+                        <input type="text" class="form-control" id="vehicle_brand" name="vehicle_brand" value="{{ client.vehicle_brand }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="vehicle_color" class="form-label">Цвет машины</label>
+                        <input type="text" class="form-control" id="vehicle_color" name="vehicle_color" value="{{ client.vehicle_color }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="inn" class="form-label">ИНН</label>
+                        <input type="text" class="form-control" id="inn" name="inn" value="{{ client.inn }}" required>
+                        <div class="form-text" id="inn-status"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Примечание</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3">{{ client.notes or "" }}</textarea>
+                    </div>
+                    <button type="submit" id="save-button" class="btn btn-success">Сохранить</button>
                     <a href="/clients" class="btn btn-secondary">Отмена</a>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("client-form");
+    const saveButton = document.getElementById("save-button");
+    const excludeId = "{{ client.id }}";
+
+    const vehicleNumberInput = document.getElementById("vehicle_number");
+    const fullNameInput = document.getElementById("full_name");
+    const phoneInput = document.getElementById("phone_number");
+    const brandInput = document.getElementById("vehicle_brand");
+    const colorInput = document.getElementById("vehicle_color");
+    const innInput = document.getElementById("inn");
+
+    const vehicleNumberStatus = document.getElementById("vehicle-number-status");
+    const fullNameStatus = document.getElementById("full-name-status");
+    const phoneStatus = document.getElementById("phone-status");
+    const phonePreview = document.getElementById("phone-preview");
+    const innStatus = document.getElementById("inn-status");
+
+    let vehicleNumberUnique = true;
+    let fullNameUnique = true;
+    let vehicleCheckTimer;
+    let fullNameCheckTimer;
+
+    function setFieldValidationClass(input, isValid) {
+        input.classList.remove("is-valid", "is-invalid");
+        input.classList.add(isValid ? "is-valid" : "is-invalid");
+    }
+
+    function sanitizeDigits(input, maxLength) {
+        input.value = input.value.replace(/\D/g, "").slice(0, maxLength);
+    }
+
+    function formatPhonePreview(value) {
+        const first = value.slice(0, 4);
+        const second = value.slice(4, 7);
+        const third = value.slice(7, 10);
+        return [first, second, third].filter(Boolean).join("-");
+    }
+
+    function updatePhoneValidation() {
+        sanitizeDigits(phoneInput, 10);
+        const isValid = phoneInput.value.length === 10;
+        setFieldValidationClass(phoneInput, isValid);
+        phonePreview.textContent = `Формат: ${formatPhonePreview(phoneInput.value) || "____-___-___"}`;
+        phoneStatus.textContent = isValid ? "✓ Номер телефона корректный (10 цифр)" : "✗ Номер телефона должен быть ровно 10 цифр";
+        phoneStatus.className = `form-text ${isValid ? "text-success" : "text-danger"}`;
+        return isValid;
+    }
+
+    function updateInnValidation() {
+        sanitizeDigits(innInput, 14);
+        const isValid = innInput.value.length === 14;
+        setFieldValidationClass(innInput, isValid);
+        innStatus.textContent = isValid ? "✓ ИНН корректный (14 цифр)" : "✗ ИНН должен быть ровно 14 цифр";
+        innStatus.className = `form-text ${isValid ? "text-success" : "text-danger"}`;
+        return isValid;
+    }
+
+    async function checkUnique(field, value, statusEl, inputEl) {
+        if (!value.trim()) {
+            statusEl.textContent = "Введите значение";
+            statusEl.className = "form-text text-muted";
+            inputEl.classList.remove("is-valid", "is-invalid");
+            return false;
+        }
+        try {
+            const params = new URLSearchParams({ field, value: value.trim(), exclude_id: excludeId });
+            const response = await fetch(`/api/check-unique?${params.toString()}`);
+            const data = await response.json();
+            setFieldValidationClass(inputEl, data.unique);
+            statusEl.textContent = data.unique ? "✓ unique" : "✗ duplicate";
+            statusEl.className = `form-text ${data.unique ? "text-success" : "text-danger"}`;
+            return data.unique;
+        } catch (error) {
+            statusEl.textContent = "Ошибка проверки уникальности";
+            statusEl.className = "form-text text-danger";
+            return false;
+        }
+    }
+
+    function updateSaveButton() {
+        const phoneValid = phoneInput.value.length === 10;
+        const innValid = innInput.value.length === 14;
+        const requiredFilled = [
+            vehicleNumberInput.value,
+            fullNameInput.value,
+            brandInput.value,
+            colorInput.value
+        ].every((value) => value.trim() !== "");
+
+        saveButton.disabled = !(vehicleNumberUnique && fullNameUnique && phoneValid && innValid && requiredFilled);
+    }
+
+    vehicleNumberInput.addEventListener("input", () => {
+        clearTimeout(vehicleCheckTimer);
+        vehicleCheckTimer = setTimeout(async () => {
+            vehicleNumberUnique = await checkUnique("vehicle_number", vehicleNumberInput.value, vehicleNumberStatus, vehicleNumberInput);
+            updateSaveButton();
+        }, 250);
+    });
+
+    fullNameInput.addEventListener("input", () => {
+        clearTimeout(fullNameCheckTimer);
+        fullNameCheckTimer = setTimeout(async () => {
+            fullNameUnique = await checkUnique("full_name", fullNameInput.value, fullNameStatus, fullNameInput);
+            updateSaveButton();
+        }, 250);
+    });
+
+    phoneInput.addEventListener("input", () => {
+        updatePhoneValidation();
+        updateSaveButton();
+    });
+
+    innInput.addEventListener("input", () => {
+        updateInnValidation();
+        updateSaveButton();
+    });
+
+    brandInput.addEventListener("input", updateSaveButton);
+    colorInput.addEventListener("input", updateSaveButton);
+
+    form.addEventListener("submit", (event) => {
+        if (saveButton.disabled) {
+            event.preventDefault();
+        }
+    });
+
+    updatePhoneValidation();
+    updateInnValidation();
+    Promise.all([
+        checkUnique("vehicle_number", vehicleNumberInput.value, vehicleNumberStatus, vehicleNumberInput).then((result) => { vehicleNumberUnique = result; }),
+        checkUnique("full_name", fullNameInput.value, fullNameStatus, fullNameInput).then((result) => { fullNameUnique = result; })
+    ]).then(updateSaveButton);
+});
+</script>
 {% endblock %}

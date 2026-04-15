@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import or_
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
@@ -35,8 +36,13 @@ def add_client():
         notes = request.form.get("notes", "").strip()
 
         is_duplicate = (
-            Client.query.filter_by(vehicle_number=vehicle_number).first() is not None
-            or Client.query.filter_by(full_name=full_name).first() is not None
+            Client.query.filter(
+                or_(
+                    Client.vehicle_number == vehicle_number,
+                    Client.full_name == full_name,
+                )
+            ).first()
+            is not None
         )
         if (
             not vehicle_number
@@ -84,17 +90,13 @@ def edit_client(id):
         inn = "".join(filter(str.isdigit, request.form.get("inn", "")))[:14]
         notes = request.form.get("notes", "").strip()
 
-        duplicate_vehicle_number = (
+        has_duplicate = (
             Client.query.filter(
-                Client.vehicle_number == vehicle_number,
                 Client.id != id,
-            ).first()
-            is not None
-        )
-        duplicate_full_name = (
-            Client.query.filter(
-                Client.full_name == full_name,
-                Client.id != id,
+                or_(
+                    Client.vehicle_number == vehicle_number,
+                    Client.full_name == full_name,
+                ),
             ).first()
             is not None
         )
@@ -105,8 +107,7 @@ def edit_client(id):
             or not vehicle_color
             or len(phone_number) != 10
             or len(inn) != 14
-            or duplicate_vehicle_number
-            or duplicate_full_name
+            or has_duplicate
         ):
             return redirect(url_for("edit_client", id=id))
 

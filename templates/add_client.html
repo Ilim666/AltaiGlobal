@@ -123,7 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const response = await fetch(`/api/check-unique?${params.toString()}`);
             const data = await response.json();
             setFieldValidationClass(inputEl, data.unique);
-            statusEl.textContent = data.unique ? "✓ unique" : "✗ duplicate";
+            statusEl.textContent = data.unique ? "✓ уникальный" : "✗ дубликат";
             statusEl.className = `form-text ${data.unique ? "text-success" : "text-danger"}`;
             return data.unique;
         } catch (error) {

@@ -173,5 +173,10 @@ def search_clients():
 
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
+        try:
+            db.drop_all()
+            db.create_all()
+        except Exception as e:
+            app.logger.error(f"Failed to initialize database: {e}")
+            raise
     app.run()

@@ -14,32 +14,27 @@
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Имя</th>
+                    <th>ФИО</th>
                     <th>Телефон</th>
-                    <th>Адрес</th>
-                    <th>Действия</th>
+                    <th>ИНН</th>
+                    <th>Машины</th>
                 </tr>
             </thead>
             <tbody>
                 {% for client in clients %}
                 <tr>
-                    <td>{{ client.id }}</td>
-                    <td>{{ client.name }}</td>
-                    <td>{{ client.phone }}</td>
-                    <td>{{ client.address }}</td>
+                    <td>{{ client.full_name }}</td>
+                    <td>{{ client.phone_number }}</td>
+                    <td>{{ client.inn }}</td>
                     <td>
-                        <a href="/client/edit/{{ client.id }}" class="btn btn-sm btn-warning">Редактировать</a>
-                        <form method="POST" action="/client/delete/{{ client.id }}" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Вы уверены?')">Удалить</button>
-                        </form>
+                        <a href="/vehicles?client_id={{ client.id }}" class="btn btn-sm btn-outline-primary">Машины ({{ client.vehicles|length }})</a>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% else %}
-        <p class="alert alert-warning">Клиентов нет. Добавьте первого клиента!</p>
+        <p class="alert alert-warning">Клиентов нет. <a href="/add-client">Добавьте первого клиента!</a></p>
         {% endif %}
     </div>
 </div>

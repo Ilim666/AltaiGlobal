@@ -88,6 +88,12 @@ def add_vehicle():
     return render_template("add_vehicle.html")
 
 
+@app.route("/clients", methods=["GET"])
+def clients():
+    all_clients = Client.query.order_by(Client.id.desc()).all()
+    return render_template("clients.html", clients=all_clients)
+
+
 @app.route("/vehicles", methods=["GET"])
 def vehicles():
     all_vehicles = (

@@ -183,6 +183,16 @@
         state.vehicle_color = this.value.trim().length > 0;
         updateSubmit();
     });
+
+    // Enter key submits form when valid (skip if search dropdown is open)
+    document.getElementById('addVehicleForm').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && !submitButton.disabled) {
+            if (dropdownElement.style.display === 'none' || dropdownElement.style.display === '') {
+                e.preventDefault();
+                this.submit();
+            }
+        }
+    });
 })();
 </script>
 {% endblock %}

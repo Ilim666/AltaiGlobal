@@ -168,6 +168,14 @@
         state.vehicle_color = this.value.trim().length > 0;
         updateSubmit();
     });
+
+    // Enter key submits form when valid
+    document.getElementById('addClientForm').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && !submitButton.disabled) {
+            e.preventDefault();
+            this.submit();
+        }
+    });
 })();
 </script>
 {% endblock %}

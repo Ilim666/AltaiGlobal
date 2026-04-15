@@ -184,13 +184,30 @@
         updateSubmit();
     });
 
-    // Enter key submits form when valid (skip if search dropdown is open)
-    document.getElementById('addVehicleForm').addEventListener('keypress', function (e) {
+    // Enter key: Tab-like navigation between vehicle fields, then submit
+    const notesInput = document.getElementById('notes');
+
+    function onEnterFocus(e, nextField) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            nextField.focus();
+        }
+    }
+
+    vehicleNumberInput.addEventListener('keydown', function (e) { onEnterFocus(e, vehicleBrandInput); });
+    vehicleBrandInput.addEventListener('keydown', function (e) { onEnterFocus(e, vehicleColorInput); });
+    vehicleColorInput.addEventListener('keydown', function (e) { onEnterFocus(e, notesInput); });
+    notesInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !submitButton.disabled) {
-            if (dropdownElement.style.display === 'none' || dropdownElement.style.display === '') {
-                e.preventDefault();
-                this.submit();
-            }
+            e.preventDefault();
+            document.getElementById('addVehicleForm').submit();
+        }
+    });
+
+    // Prevent accidental form submission on Enter in the client search field
+    searchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
         }
     });
 })();

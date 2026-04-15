@@ -169,11 +169,26 @@
         updateSubmit();
     });
 
-    // Enter key submits form when valid
-    document.getElementById('addClientForm').addEventListener('keypress', function (e) {
+    // Enter key: Tab-like navigation between fields
+    const notesInput = document.getElementById('notes');
+
+    function onEnterFocus(e, nextField) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            nextField.focus();
+        }
+    }
+
+    fullNameInput.addEventListener('keydown', function (e) { onEnterFocus(e, phoneInput); });
+    phoneInput.addEventListener('keydown', function (e) { onEnterFocus(e, innInput); });
+    innInput.addEventListener('keydown', function (e) { onEnterFocus(e, vehicleNumberInput); });
+    vehicleNumberInput.addEventListener('keydown', function (e) { onEnterFocus(e, vehicleBrandInput); });
+    vehicleBrandInput.addEventListener('keydown', function (e) { onEnterFocus(e, vehicleColorInput); });
+    vehicleColorInput.addEventListener('keydown', function (e) { onEnterFocus(e, notesInput); });
+    notesInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !submitButton.disabled) {
             e.preventDefault();
-            this.submit();
+            document.getElementById('addClientForm').submit();
         }
     });
 })();

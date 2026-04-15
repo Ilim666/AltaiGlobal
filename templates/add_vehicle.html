@@ -1,33 +1,39 @@
 {% extends "base.html" %}
 
-{% block title %}Добавление клиента - AltaiGlobal{% endblock %}
+{% block title %}Добавить машину - AltaiGlobal{% endblock %}
 
 {% block content %}
-<h1>Добавление клиента</h1>
+<h1>Добавить машину клиенту</h1>
 
 <div class="row">
     <div class="col-lg-8 col-xl-7">
-        <form method="POST" id="addClientForm">
-            <!-- CLIENT DATA -->
+        <form method="POST" id="addVehicleForm">
+            <input type="hidden" id="client_id" name="client_id">
+
+            <!-- CLIENT SEARCH -->
             <div class="card mb-3">
                 <div class="card-header">
-                    <h6 class="mb-0">Данные клиента</h6>
+                    <h6 class="mb-0">Поиск клиента</h6>
                 </div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <label for="full_name" class="form-label">ФИО клиента</label>
-                        <input type="text" class="form-control" id="full_name" name="full_name" required autocomplete="off">
-                        <div class="form-text" id="full_name_feedback"></div>
+                    <div class="mb-3 position-relative">
+                        <label for="client_search" class="form-label">Поиск по ФИО или телефону</label>
+                        <input type="text" class="form-control" id="client_search" placeholder="Начните вводить..." autocomplete="off">
+                        <div id="search_dropdown" class="list-group position-absolute w-100" style="z-index:1000; display:none; top:100%;"></div>
                     </div>
-                    <div class="mb-3">
-                        <label for="phone_number" class="form-label">Номер телефона</label>
-                        <input type="text" class="form-control" id="phone_number" name="phone_number" maxlength="10" required autocomplete="off">
-                        <div class="form-text" id="phone_feedback">Введите 10 цифр</div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="inn" class="form-label">ИНН</label>
-                        <input type="text" class="form-control" id="inn" name="inn" maxlength="14" required autocomplete="off">
-                        <div class="form-text" id="inn_feedback">Введите 14 цифр</div>
+                    <div id="client_info" style="display:none;">
+                        <div class="mb-3">
+                            <label class="form-label">ФИО клиента</label>
+                            <input type="text" class="form-control" id="disp_full_name" readonly style="background:#f0f0f0;">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Номер телефона</label>
+                            <input type="text" class="form-control" id="disp_phone_number" readonly style="background:#f0f0f0;">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">ИНН</label>
+                            <input type="text" class="form-control" id="disp_inn" readonly style="background:#f0f0f0;">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -58,25 +64,24 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-success" id="submitBtn" disabled>Добавить клиента + машину</button>
+            <button type="submit" class="btn btn-success" id="submitBtn" disabled>Добавить машину</button>
         </form>
     </div>
 </div>
 
 <script>
 (function () {
-    const fullNameInput = document.getElementById('full_name');
-    const phoneInput = document.getElementById('phone_number');
-    const innInput = document.getElementById('inn');
+    const searchInput = document.getElementById('client_search');
+    const dropdownElement = document.getElementById('search_dropdown');
+    const clientInfoElement = document.getElementById('client_info');
+    const clientIdInput = document.getElementById('client_id');
     const vehicleNumberInput = document.getElementById('vehicle_number');
     const vehicleBrandInput = document.getElementById('vehicle_brand');
     const vehicleColorInput = document.getElementById('vehicle_color');
     const submitButton = document.getElementById('submitBtn');
 
     const state = {
-        full_name: false,
-        phone: false,
-        inn: false,
+        client_selected: false,
         vehicle_number: false,
         vehicle_brand: false,
         vehicle_color: false,
@@ -103,41 +108,53 @@
         if (feedbackEl) { feedbackEl.textContent = msg || ''; feedbackEl.style.color = ''; }
     }
 
-    // ФИО uniqueness check
-    let fullNameTimer;
-    fullNameInput.addEventListener('input', function () {
-        clearTimeout(fullNameTimer);
-        const val = this.value.trim();
-        const fb = document.getElementById('full_name_feedback');
-        if (!val) { setNeutral(this, fb, ''); state.full_name = false; updateSubmit(); return; }
-        fullNameTimer = setTimeout(() => {
-            fetch('/api/check-unique?field=full_name&value=' + encodeURIComponent(val))
+    // Client search autocomplete
+    let searchTimer;
+    searchInput.addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        const q = this.value.trim();
+        if (!q) { dropdown.style.display = 'none'; return; }
+        searchTimer = setTimeout(() => {
+            fetch('/api/search-clients?q=' + encodeURIComponent(q))
                 .then(r => r.json())
                 .then(data => {
-                    if (data.unique) { setValid(this, fb, '✓ Уникальное ФИО'); state.full_name = true; }
-                    else { setInvalid(this, fb, '✗ Такой клиент уже есть'); state.full_name = false; }
-                    updateSubmit();
+                    dropdownElement.innerHTML = '';
+                    if (data.clients.length === 0) {
+                        dropdownElement.style.display = 'none';
+                        return;
+                    }
+                    data.clients.forEach(c => {
+                        const item = document.createElement('button');
+                        item.type = 'button';
+                        item.className = 'list-group-item list-group-item-action';
+                        item.textContent = c.full_name + ' — ' + c.phone_number;
+                        item.addEventListener('click', () => {
+                            selectClient(c);
+                        });
+                        dropdownElement.appendChild(item);
+                    });
+                    dropdownElement.style.display = 'block';
                 });
-        }, 300);
+        }, 250);
     });
 
-    // Телефон – digits only, max 10
-    phoneInput.addEventListener('input', function () {
-        this.value = this.value.replace(/\D/g, '').slice(0, 10);
-        const fb = document.getElementById('phone_feedback');
-        if (this.value.length === 10) { setValid(this, fb, '✓ 10 цифр'); state.phone = true; }
-        else { setInvalid(this, fb, `Введено ${this.value.length} из 10 цифр`); state.phone = false; }
-        updateSubmit();
+    document.addEventListener('click', function (e) {
+        if (!searchInput.contains(e.target) && !dropdownElement.contains(e.target)) {
+            dropdownElement.style.display = 'none';
+        }
     });
 
-    // ИНН – digits only, max 14
-    innInput.addEventListener('input', function () {
-        this.value = this.value.replace(/\D/g, '').slice(0, 14);
-        const fb = document.getElementById('inn_feedback');
-        if (this.value.length === 14) { setValid(this, fb, '✓ 14 цифр'); state.inn = true; }
-        else { setInvalid(this, fb, `Введено ${this.value.length} из 14 цифр`); state.inn = false; }
+    function selectClient(c) {
+        clientIdInput.value = c.id;
+        document.getElementById('disp_full_name').value = c.full_name;
+        document.getElementById('disp_phone_number').value = c.phone_number;
+        document.getElementById('disp_inn').value = c.inn;
+        searchInput.value = c.full_name;
+        dropdownElement.style.display = 'none';
+        clientInfoElement.style.display = 'block';
+        state.client_selected = true;
         updateSubmit();
-    });
+    }
 
     // Номер машины uniqueness check
     let vehicleNumberTimer;
@@ -157,13 +174,11 @@
         }, 300);
     });
 
-    // Марка
     vehicleBrandInput.addEventListener('input', function () {
         state.vehicle_brand = this.value.trim().length > 0;
         updateSubmit();
     });
 
-    // Цвет
     vehicleColorInput.addEventListener('input', function () {
         state.vehicle_color = this.value.trim().length > 0;
         updateSubmit();

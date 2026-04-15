@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Редактирование машины - AltaiGlobal{% endblock %}
+
+{% block content %}
+<h1>Редактирование машины</h1>
+
+<div class="row">
+    <div class="col-lg-7 col-xl-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Клиент: {{ vehicle.client.full_name }}</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="editVehicleForm">
+                    <div class="mb-3">
+                        <label for="vehicle_number" class="form-label">Номер машины</label>
+                        <input type="text" class="form-control" id="vehicle_number" name="vehicle_number"
+                               value="{{ vehicle.vehicle_number }}" required autocomplete="off">
+                        <div class="form-text" id="vehicle_number_feedback"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="vehicle_brand" class="form-label">Марка машины</label>
+                        <input type="text" class="form-control" id="vehicle_brand" name="vehicle_brand"
+                               value="{{ vehicle.vehicle_brand }}" required autocomplete="off">
+                    </div>
+                    <div class="mb-3">
+                        <label for="vehicle_color" class="form-label">Цвет машины</label>
+                        <input type="text" class="form-control" id="vehicle_color" name="vehicle_color"
+                               value="{{ vehicle.vehicle_color }}" required autocomplete="off">
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Примечание <span class="text-muted">(необязательно)</span></label>
+                        <input type="text" class="form-control" id="notes" name="notes"
+                               value="{{ vehicle.notes or '' }}" autocomplete="off">
+                    </div>
+                    <button type="submit" class="btn btn-success">Сохранить</button>
+                    <a href="/vehicles" class="btn btn-secondary">Отмена</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const vehicleNumberInput = document.getElementById('vehicle_number');
+    const excludeId = {{ vehicle.id }};
+    let timer;
+
+    function setValid(input, fb, msg) {
+        input.classList.remove('is-invalid'); input.classList.add('is-valid');
+        if (fb) { fb.textContent = msg; fb.style.color = 'green'; }
+    }
+    function setInvalid(input, fb, msg) {
+        input.classList.remove('is-valid'); input.classList.add('is-invalid');
+        if (fb) { fb.textContent = msg; fb.style.color = 'red'; }
+    }
+
+    vehicleNumberInput.addEventListener('input', function () {
+        clearTimeout(timer);
+        const val = this.value.trim();
+        const fb = document.getElementById('vehicle_number_feedback');
+        if (!val) { this.classList.remove('is-valid', 'is-invalid'); fb.textContent = ''; return; }
+        timer = setTimeout(() => {
+            fetch('/api/check-unique?field=vehicle_number&value=' + encodeURIComponent(val) + '&exclude_id=' + excludeId)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.unique) setValid(this, fb, '✓ Уникальный номер');
+                    else setInvalid(this, fb, '✗ Такой номер уже есть');
+                });
+        }, 300);
+    });
+})();
+</script>
+{% endblock %}

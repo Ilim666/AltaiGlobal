@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Машины - AltaiGlobal{% endblock %}
+
+{% block content %}
+<h1>Машины клиентов</h1>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Список машин ({{ vehicles|length }})</h5>
+    </div>
+    <div class="card-body">
+        {% if vehicles %}
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>ФИО клиента</th>
+                    <th>Телефон</th>
+                    <th>ИНН</th>
+                    <th>Номер машины</th>
+                    <th>Марка</th>
+                    <th>Цвет</th>
+                    <th>Примечание</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vehicle in vehicles %}
+                <tr>
+                    <td>{{ vehicle.client.full_name }}</td>
+                    <td>{{ vehicle.client.phone_number }}</td>
+                    <td>{{ vehicle.client.inn }}</td>
+                    <td>{{ vehicle.vehicle_number }}</td>
+                    <td>{{ vehicle.vehicle_brand }}</td>
+                    <td>{{ vehicle.vehicle_color }}</td>
+                    <td>{{ vehicle.notes or '—' }}</td>
+                    <td>
+                        <a href="/vehicle/edit/{{ vehicle.id }}" class="btn btn-sm btn-warning">Редактировать</a>
+                        <form method="POST" action="/vehicle/delete/{{ vehicle.id }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Удалить машину {{ vehicle.vehicle_number }}?')">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="alert alert-warning">Машин нет. <a href="/add-client">Добавьте первого клиента с машиной!</a></p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

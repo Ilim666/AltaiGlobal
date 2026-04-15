@@ -9,14 +9,26 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" id="client-form">
                     <div class="mb-3">
-                        <label for="name" class="form-label">Имя</label>
-                        <input type="text" class="form-control" id="name" name="name" value="{{ client.name }}" required>
+                        <label for="name" class="form-label">ФИО</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ client.name }}" maxlength="100" required>
+                        <div id="name-feedback" class="rt-feedback"></div>
                     </div>
                     <div class="mb-3">
-                        <label for="phone" class="form-label">Телефон</label>
-                        <input type="text" class="form-control" id="phone" name="phone" value="{{ client.phone }}" required>
+                        <label for="phone" class="form-label">Номер телефона</label>
+                        <input type="text" class="form-control" id="phone" name="phone" value="{{ client.phone }}" inputmode="numeric" maxlength="10" required>
+                        <div id="phone-feedback" class="rt-feedback"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="inn" class="form-label">ИНН</label>
+                        <input type="text" class="form-control" id="inn" name="inn" value="{{ client.inn|default('', true) }}" inputmode="numeric" maxlength="14" required>
+                        <div id="inn-feedback" class="rt-feedback"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="vehicle_number" class="form-label">Номер машины</label>
+                        <input type="text" class="form-control" id="vehicle_number" name="vehicle_number" value="{{ client.vehicle_number|default('', true) }}" maxlength="20" required>
+                        <div id="vehicle-feedback" class="rt-feedback"></div>
                     </div>
                     <div class="mb-3">
                         <label for="address" class="form-label">Адрес</label>
@@ -29,4 +41,98 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const validClass = "rt-valid";
+        const invalidClass = "rt-invalid";
+
+        function setFieldState(input, feedbackEl, isValid, message) {
+            input.classList.remove(validClass, invalidClass);
+            feedbackEl.classList.remove("valid", "invalid");
+
+            if (isValid) {
+                input.classList.add(validClass);
+                feedbackEl.classList.add("valid");
+            } else {
+                input.classList.add(invalidClass);
+                feedbackEl.classList.add("invalid");
+            }
+
+            feedbackEl.textContent = message;
+        }
+
+        function digitsOnly(value, maxLength) {
+            return value.replace(/\D/g, "").slice(0, maxLength);
+        }
+
+        function formatPhonePreview(value) {
+            const parts = [];
+            if (value.length > 0) parts.push(value.slice(0, 4));
+            if (value.length > 4) parts.push(value.slice(4, 7));
+            if (value.length > 7) parts.push(value.slice(7, 10));
+            return parts.join("-");
+        }
+
+        const nameInput = document.getElementById("name");
+        const nameFeedback = document.getElementById("name-feedback");
+        const phoneInput = document.getElementById("phone");
+        const phoneFeedback = document.getElementById("phone-feedback");
+        const innInput = document.getElementById("inn");
+        const innFeedback = document.getElementById("inn-feedback");
+        const vehicleInput = document.getElementById("vehicle_number");
+        const vehicleFeedback = document.getElementById("vehicle-feedback");
+
+        function validateName() {
+            const count = nameInput.value.length;
+            const isValid = count >= 3;
+            setFieldState(nameInput, nameFeedback, isValid, `Символов: ${count}/100`);
+        }
+
+        function validatePhone() {
+            const digits = digitsOnly(phoneInput.value, 10);
+            phoneInput.value = digits;
+            const isValid = digits.length === 10;
+            const preview = formatPhonePreview(digits);
+            const previewText = preview ? ` Формат: ${preview}` : "";
+            setFieldState(
+                phoneInput,
+                phoneFeedback,
+                isValid,
+                isValid
+                    ? `Номер корректный.${previewText}`
+                    : `Введите 10 цифр. Сейчас: ${digits.length}/10.${previewText}`
+            );
+        }
+
+        function validateInn() {
+            const digits = digitsOnly(innInput.value, 14);
+            innInput.value = digits;
+            const isValid = digits.length === 14;
+            setFieldState(
+                innInput,
+                innFeedback,
+                isValid,
+                isValid ? "ИНН корректный." : `Введите 14 цифр. Сейчас: ${digits.length}/14.`
+            );
+        }
+
+        function validateVehicle() {
+            const maxLength = Number(vehicleInput.maxLength) || 20;
+            const count = vehicleInput.value.length;
+            const isValid = count > 0 && count <= maxLength;
+            setFieldState(vehicleInput, vehicleFeedback, isValid, `Символов: ${count}/${maxLength}`);
+        }
+
+        nameInput.addEventListener("input", validateName);
+        phoneInput.addEventListener("input", validatePhone);
+        innInput.addEventListener("input", validateInn);
+        vehicleInput.addEventListener("input", validateVehicle);
+
+        validateName();
+        validatePhone();
+        validateInn();
+        validateVehicle();
+    });
+</script>
 {% endblock %}

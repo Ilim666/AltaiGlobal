@@ -184,13 +184,29 @@
         updateSubmit();
     });
 
-    // Enter key submits form when valid (skip if search dropdown is open)
-    document.getElementById('addVehicleForm').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter' && !submitButton.disabled) {
-            if (dropdownElement.style.display === 'none' || dropdownElement.style.display === '') {
-                e.preventDefault();
-                this.submit();
-            }
+    function isDropdownHidden() {
+        return dropdownElement.style.display === 'none' || dropdownElement.style.display === '';
+    }
+
+    // Enter key navigation between fields (skip if search dropdown is open)
+    vehicleNumberInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && isDropdownHidden()) {
+            e.preventDefault();
+            vehicleBrandInput.focus();
+        }
+    });
+
+    vehicleBrandInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && isDropdownHidden()) {
+            e.preventDefault();
+            vehicleColorInput.focus();
+        }
+    });
+
+    vehicleColorInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && !submitButton.disabled && isDropdownHidden()) {
+            e.preventDefault();
+            document.getElementById('addVehicleForm').submit();
         }
     });
 })();

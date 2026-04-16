@@ -71,7 +71,9 @@
     const vehicleNumberInput = document.getElementById('vehicle_number');
     const vehicleBrandInput = document.getElementById('vehicle_brand');
     const vehicleColorInput = document.getElementById('vehicle_color');
+    const notesInput = document.getElementById('notes');
     const submitButton = document.getElementById('submitBtn');
+    const form = document.getElementById('addClientForm');
 
     const state = {
         full_name: false,
@@ -169,11 +171,53 @@
         updateSubmit();
     });
 
-    // Enter key submits form when valid
-    document.getElementById('addClientForm').addEventListener('keypress', function (e) {
+    // Enter key navigation between fields
+    fullNameInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            phoneInput.focus();
+        }
+    });
+
+    phoneInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            innInput.focus();
+        }
+    });
+
+    innInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            vehicleNumberInput.focus();
+        }
+    });
+
+    vehicleNumberInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            vehicleBrandInput.focus();
+        }
+    });
+
+    vehicleBrandInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            vehicleColorInput.focus();
+        }
+    });
+
+    vehicleColorInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            notesInput.focus();
+        }
+    });
+
+    notesInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && !submitButton.disabled) {
             e.preventDefault();
-            this.submit();
+            form.submit();
         }
     });
 })();

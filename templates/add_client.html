@@ -71,6 +71,7 @@
     const vehicleNumberInput = document.getElementById('vehicle_number');
     const vehicleBrandInput = document.getElementById('vehicle_brand');
     const vehicleColorInput = document.getElementById('vehicle_color');
+    const notesInput = document.getElementById('notes');
     const submitButton = document.getElementById('submitBtn');
 
     const state = {
@@ -169,11 +170,25 @@
         updateSubmit();
     });
 
-    // Enter key submits form when valid
-    document.getElementById('addClientForm').addEventListener('keypress', function (e) {
+    // Enter key navigation between fields
+    function addEnterNav(current, next) {
+        current.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                next.focus();
+            }
+        });
+    }
+    addEnterNav(fullNameInput, phoneInput);
+    addEnterNav(phoneInput, innInput);
+    addEnterNav(innInput, vehicleNumberInput);
+    addEnterNav(vehicleNumberInput, vehicleBrandInput);
+    addEnterNav(vehicleBrandInput, vehicleColorInput);
+    addEnterNav(vehicleColorInput, notesInput);
+    notesInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter' && !submitButton.disabled) {
             e.preventDefault();
-            this.submit();
+            document.getElementById('addClientForm').submit();
         }
     });
 })();

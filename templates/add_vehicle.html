@@ -78,6 +78,7 @@
     const vehicleNumberInput = document.getElementById('vehicle_number');
     const vehicleBrandInput = document.getElementById('vehicle_brand');
     const vehicleColorInput = document.getElementById('vehicle_color');
+    const notesInput = document.getElementById('notes');
     const submitButton = document.getElementById('submitBtn');
 
     const state = {
@@ -184,13 +185,22 @@
         updateSubmit();
     });
 
-    // Enter key submits form when valid (skip if search dropdown is open)
-    document.getElementById('addVehicleForm').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter' && !submitButton.disabled) {
-            if (dropdownElement.style.display === 'none' || dropdownElement.style.display === '') {
+    // Enter key navigation between fields
+    function addEnterNav(current, next) {
+        current.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
                 e.preventDefault();
-                this.submit();
+                next.focus();
             }
+        });
+    }
+    addEnterNav(vehicleNumberInput, vehicleBrandInput);
+    addEnterNav(vehicleBrandInput, vehicleColorInput);
+    addEnterNav(vehicleColorInput, notesInput);
+    notesInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && !submitButton.disabled) {
+            e.preventDefault();
+            document.getElementById('addVehicleForm').submit();
         }
     });
 })();

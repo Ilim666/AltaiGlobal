@@ -90,19 +90,28 @@ def add_vehicle():
 
 @app.route("/clients", methods=["GET"])
 def clients():
-    all_clients = Client.query.order_by(Client.id.desc()).all()
-    return render_template("clients.html", clients=all_clients)
+    search = request.args.get("search", "").strip()
+    query = Client.query
+    if search:
+        query = query.filter(
+            db.or_(
+                Client.full_name.ilike(f"%{search}%"),
+                Client.phone_number.ilike(f"%{search}%"),
+            )
+        )
+    all_clients = query.order_by(Client.id.desc()).all()
+    return render_template("clients.html", clients=all_clients, search=search)
 
 
 @app.route("/vehicles", methods=["GET"])
 def vehicles():
-    all_vehicles = (
-        db.session.query(Vehicle)
-        .join(Client)
-        .order_by(Vehicle.id.desc())
-        .all()
-    )
-    return render_template("vehicles.html", vehicles=all_vehicles)
+    client_id = request.args.get("client_id", type=int)
+    query = db.session.query(Vehicle).join(Client)
+    if client_id:
+        query = query.filter(Vehicle.client_id == client_id)
+    all_vehicles = query.order_by(Vehicle.id.desc()).all()
+    client_filter = Client.query.get(client_id) if client_id else None
+    return render_template("vehicles.html", vehicles=all_vehicles, client_filter=client_filter)
 
 
 @app.route("/vehicle/edit/<int:id>", methods=["GET", "POST"])

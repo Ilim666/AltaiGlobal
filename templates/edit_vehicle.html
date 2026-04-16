@@ -34,7 +34,7 @@
                         <input type="text" class="form-control" id="notes" name="notes"
                                value="{{ vehicle.notes or '' }}" autocomplete="off">
                     </div>
-                    <button type="submit" class="btn btn-success">Сохранить</button>
+                    <button type="submit" class="btn btn-success" id="submitBtn">Обновить</button>
                     <a href="/vehicles" class="btn btn-secondary">Отмена</a>
                 </form>
             </div>
@@ -45,8 +45,14 @@
 <script>
 (function () {
     const vehicleNumberInput = document.getElementById('vehicle_number');
+    const vehicleBrandInput = document.getElementById('vehicle_brand');
+    const vehicleColorInput = document.getElementById('vehicle_color');
+    const notesInput = document.getElementById('notes');
+    const submitBtn = document.getElementById('submitBtn');
     const excludeId = {{ vehicle.id }};
     let timer;
+
+    const state = { vehicle_number: true };
 
     function setValid(input, fb, msg) {
         input.classList.remove('is-invalid'); input.classList.add('is-valid');
@@ -61,15 +67,34 @@
         clearTimeout(timer);
         const val = this.value.trim();
         const fb = document.getElementById('vehicle_number_feedback');
-        if (!val) { this.classList.remove('is-valid', 'is-invalid'); fb.textContent = ''; return; }
+        if (!val) { this.classList.remove('is-valid', 'is-invalid'); fb.textContent = ''; state.vehicle_number = false; return; }
         timer = setTimeout(() => {
             fetch('/api/check-unique?field=vehicle_number&value=' + encodeURIComponent(val) + '&exclude_id=' + excludeId)
                 .then(r => r.json())
                 .then(data => {
-                    if (data.unique) setValid(this, fb, '✓ Уникальный номер');
-                    else setInvalid(this, fb, '✗ Такой номер уже есть');
+                    if (data.unique) { setValid(this, fb, '✓ Уникальный номер'); state.vehicle_number = true; }
+                    else { setInvalid(this, fb, '✗ Такой номер уже есть'); state.vehicle_number = false; }
                 });
         }, 300);
+    });
+
+    // Enter key navigation
+    vehicleNumberInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); vehicleBrandInput.focus(); }
+    });
+    vehicleBrandInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); vehicleColorInput.focus(); }
+    });
+    vehicleColorInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); notesInput.focus(); }
+    });
+    notesInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (state.vehicle_number) {
+                document.getElementById('editVehicleForm').submit();
+            }
+        }
     });
 })();
 </script>

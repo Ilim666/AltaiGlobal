@@ -5,6 +5,13 @@
 {% block content %}
 <h1>Машины клиентов</h1>
 
+{% if client_filter %}
+<div class="alert alert-info d-flex align-items-center justify-content-between">
+    <span>Показаны машины клиента: <strong>{{ client_filter.full_name }}</strong></span>
+    <a href="/vehicles" class="btn btn-sm btn-outline-secondary">Все машины</a>
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-header">
         <h5 class="mb-0">Список машин ({{ vehicles|length }})</h5>
@@ -37,7 +44,7 @@
                     <td>
                         <a href="/vehicle/edit/{{ vehicle.id }}" class="btn btn-sm btn-warning">Редактировать</a>
                         <form method="POST" action="/vehicle/delete/{{ vehicle.id }}" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Удалить машину {{ vehicle.vehicle_number }}?')">Удалить</button>
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Вы уверены? Это действие не может быть отменено.')">Удалить</button>
                         </form>
                     </td>
                 </tr>

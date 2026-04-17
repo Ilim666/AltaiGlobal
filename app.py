@@ -301,7 +301,10 @@ def api_sales_list():
 
     query = Sale.query
     if client_id:
-        query = query.filter(Sale.client_id == int(client_id))
+        try:
+            query = query.filter(Sale.client_id == int(client_id))
+        except ValueError:
+            return jsonify({"error": "Неверный формат client_id"}), 400
     if date_from:
         try:
             dt_from = datetime.strptime(date_from, "%Y-%m-%d")
@@ -551,4 +554,4 @@ def export_sales():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run(debug=False)

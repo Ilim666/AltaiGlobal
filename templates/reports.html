@@ -74,9 +74,6 @@
 var lastReportData = [];
 var lastReportType = 'summary';
 
-function escHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
 
 async function loadReport() {
   var type = document.getElementById('reportType').value;

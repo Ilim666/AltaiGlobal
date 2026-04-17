@@ -97,15 +97,12 @@ function renderClients(list) {
       '<td class="text-muted small">' + c.created_at + '</td>' +
       '<td class="text-end">' +
         '<button class="btn btn-outline-primary btn-action me-1" onclick="openEditModal(' + c.id + ')"><i class="bi bi-pencil"></i></button>' +
-        '<button class="btn btn-outline-danger btn-action" onclick="deleteClient(' + c.id + ', \'' + escHtml(c.full_name).replace(/'/g, "\\'") + '\')"><i class="bi bi-trash"></i></button>' +
+        '<button class="btn btn-outline-danger btn-action" data-id="' + c.id + '" data-name="' + escHtml(c.full_name) + '" onclick="deleteClientBtn(this)"><i class="bi bi-trash"></i></button>' +
       '</td></tr>';
   }).join('');
   document.getElementById('clientsCount').textContent = 'Показано: ' + list.length + ' клиент(ов)';
 }
 
-function escHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 function clearErrors() {
   ['clientName','clientPhone','clientInn'].forEach(function(id) {
@@ -165,6 +162,10 @@ async function saveClient() {
       showToast('Ошибка сохранения', 'error');
     }
   }
+}
+
+function deleteClientBtn(btn) {
+  deleteClient(btn.dataset.id, btn.dataset.name);
 }
 
 function deleteClient(id, name) {

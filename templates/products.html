@@ -67,9 +67,6 @@
 {% endblock %}
 {% block scripts %}
 <script>
-function escHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 async function loadProducts(q) {
   q = q || '';
@@ -100,7 +97,7 @@ function renderProducts(list) {
       '<td class="text-end">' + qtyBadge + '</td>' +
       '<td class="text-end">' +
         '<button class="btn btn-outline-primary btn-action me-1" onclick="openEditModal(' + p.id + ')"><i class="bi bi-pencil"></i></button>' +
-        '<button class="btn btn-outline-danger btn-action" onclick="deleteProduct(' + p.id + ', \'' + escHtml(p.name).replace(/'/g, "\\'") + '\')"><i class="bi bi-trash"></i></button>' +
+        '<button class="btn btn-outline-danger btn-action" data-id="' + p.id + '" data-name="' + escHtml(p.name) + '" onclick="deleteProductBtn(this)"><i class="bi bi-trash"></i></button>' +
       '</td></tr>';
   }).join('');
   document.getElementById('productsCount').textContent = 'Показано: ' + list.length + ' товар(ов)';
@@ -165,6 +162,10 @@ async function saveProduct() {
       showToast('Ошибка сохранения', 'error');
     }
   }
+}
+
+function deleteProductBtn(btn) {
+  deleteProduct(btn.dataset.id, btn.dataset.name);
 }
 
 function deleteProduct(id, name) {

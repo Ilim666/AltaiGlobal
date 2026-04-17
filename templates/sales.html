@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Новая продажа — AltaiGlobal{% endblock %}
+{% block page_title %}Новая продажа{% endblock %}
+
+{% block head %}
+<style>
+    #price-info { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-12 col-md-8 col-lg-6">
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        <form method="POST" novalidate>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Клиент <span class="text-danger">*</span></label>
+                <select name="client_id" class="form-select" required>
+                    <option value="">— Выберите клиента —</option>
+                    {% for c in clients %}
+                    <option value="{{ c.id }}">{{ c.name }} ({{ c.phone }})</option>
+                    {% endfor %}
+                </select>
+                {% if not clients %}
+                <div class="form-text text-danger">Нет клиентов. <a href="/add-client">Добавьте клиента</a> сначала.</div>
+                {% endif %}
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Товар <span class="text-danger">*</span></label>
+                <select name="product_id" id="productSelect" class="form-select" required>
+                    <option value="">— Выберите товар —</option>
+                    {% for p in products %}
+                    <option value="{{ p.id }}" data-price="{{ p.price }}" data-stock="{{ p.quantity }}">
+                        {{ p.name }} — {{ "%.2f"|format(p.price) }} ₸ ({{ p.quantity }} шт.)
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if not products %}
+                <div class="form-text text-danger">Нет товаров. <a href="/add-product">Добавьте товар</a> сначала.</div>
+                {% endif %}
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Количество <span class="text-danger">*</span></label>
+                <input type="number" name="quantity" id="qtyInput" class="form-control" min="1" required placeholder="1">
+            </div>
+            <div id="price-info" class="alert alert-success mb-4">
+                <strong>Итого:</strong> <span id="totalDisplay">0.00</span> ₸
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill"><i class="bi bi-cart-check me-1"></i>Оформить продажу</button>
+                <a href="/sales-list" class="btn btn-outline-secondary">История</a>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const sel = document.getElementById('productSelect');
+    const qty = document.getElementById('qtyInput');
+    const info = document.getElementById('price-info');
+    const total = document.getElementById('totalDisplay');
+    function calc() {
+        const opt = sel.options[sel.selectedIndex];
+        const price = parseFloat(opt.dataset.price || 0);
+        const q = parseInt(qty.value || 0);
+        if (price > 0 && q > 0) {
+            total.textContent = (price * q).toFixed(2);
+            info.style.display = 'block';
+        } else {
+            info.style.display = 'none';
+        }
+    }
+    sel.addEventListener('change', calc);
+    qty.addEventListener('input', calc);
+</script>
+{% endblock %}

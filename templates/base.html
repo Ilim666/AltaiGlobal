@@ -4,72 +4,115 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}AltaiGlobal{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
-        body {
-            background-color: #f8f9fa;
-        }
-        .app-layout {
-            display: flex;
-            min-height: 100vh;
-        }
+        :root { --sidebar-width: 260px; }
+        body { background: #f0f2f5; }
         .sidebar {
-            width: 250px;
-            background: #1f2937;
+            position: fixed; top: 0; left: 0; bottom: 0;
+            width: var(--sidebar-width);
+            background: linear-gradient(180deg, #1a2942 0%, #243b55 100%);
             color: #fff;
-            padding: 1.5rem 1rem;
-            flex-shrink: 0;
+            overflow-y: auto;
+            z-index: 100;
+            display: flex; flex-direction: column;
         }
-        .sidebar-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 1.5rem;
+        .sidebar-brand {
+            padding: 1.5rem 1.25rem 1rem;
+            font-size: 1.3rem; font-weight: 700; letter-spacing: 0.5px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
+        .sidebar-brand small { display: block; font-size: 0.7rem; font-weight: 400; opacity: 0.6; margin-top: 2px; }
+        .sidebar-section { padding: 1rem 1.25rem 0.25rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; }
         .sidebar .nav-link {
-            color: #d1d5db;
+            color: rgba(255,255,255,0.75);
             border-radius: 0.5rem;
-            margin-bottom: 0.5rem;
-            padding: 0.65rem 0.9rem;
-            transition: all 0.2s ease;
+            margin: 0.15rem 0.75rem;
+            padding: 0.6rem 0.9rem;
+            display: flex; align-items: center; gap: 0.6rem;
+            font-size: 0.92rem;
+            transition: all 0.15s ease;
         }
-        .sidebar .nav-link:hover,
-        .sidebar .nav-link.active {
-            color: #fff;
-            background: #374151;
+        .sidebar .nav-link:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .sidebar .nav-link.active { background: rgba(255,255,255,0.18); color: #fff; font-weight: 600; }
+        .main-wrapper { margin-left: var(--sidebar-width); min-height: 100vh; }
+        .top-bar {
+            background: #fff; border-bottom: 1px solid #dee2e6;
+            padding: 0.75rem 1.75rem;
+            display: flex; align-items: center; gap: 0.5rem;
         }
-        .main-content {
-            flex: 1;
-            padding: 2rem;
-        }
+        .top-bar .page-title { font-size: 1.2rem; font-weight: 600; margin: 0; }
+        .content-area { padding: 1.75rem; }
         @media (max-width: 768px) {
-            .app-layout {
-                flex-direction: column;
-            }
-            .sidebar {
-                width: 100%;
-                padding: 1rem;
-            }
-            .main-content {
-                padding: 1rem;
-            }
+            .sidebar { position: static; width: 100%; }
+            .main-wrapper { margin-left: 0; }
         }
     </style>
+    {% block head %}{% endblock %}
 </head>
 <body>
-    <div class="app-layout">
-        <aside class="sidebar">
-            <div class="sidebar-title">AltaiGlobal</div>
-            <nav class="nav flex-column">
-                <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">Добавление клиента</a>
-                <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">Клиенты</a>
-            </nav>
-        </aside>
-
-        <main class="main-content">
-            {% block content %}{% endblock %}
-        </main>
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="bi bi-globe2 me-2"></i>AltaiGlobal
+        <small>Система учёта</small>
     </div>
+    <nav class="nav flex-column pt-2">
+        <div class="sidebar-section">Главная</div>
+        <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">
+            <i class="bi bi-house-door"></i> Дашборд
+        </a>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        <div class="sidebar-section mt-2">Клиенты</div>
+        <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">
+            <i class="bi bi-people"></i> Список клиентов
+        </a>
+        <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">
+            <i class="bi bi-person-plus"></i> Добавить клиента
+        </a>
+
+        <div class="sidebar-section mt-2">Товары</div>
+        <a class="nav-link {% if request.path == '/products' %}active{% endif %}" href="/products">
+            <i class="bi bi-box-seam"></i> Список товаров
+        </a>
+        <a class="nav-link {% if request.path == '/add-product' %}active{% endif %}" href="/add-product">
+            <i class="bi bi-plus-square"></i> Добавить товар
+        </a>
+
+        <div class="sidebar-section mt-2">Продажи</div>
+        <a class="nav-link {% if request.path == '/sales' %}active{% endif %}" href="/sales">
+            <i class="bi bi-cart-plus"></i> Новая продажа
+        </a>
+        <a class="nav-link {% if request.path == '/sales-list' %}active{% endif %}" href="/sales-list">
+            <i class="bi bi-receipt"></i> История продаж
+        </a>
+
+        <div class="sidebar-section mt-2">Аналитика</div>
+        <a class="nav-link {% if request.path == '/reports' %}active{% endif %}" href="/reports">
+            <i class="bi bi-bar-chart-line"></i> Отчёты
+        </a>
+    </nav>
+</div>
+
+<div class="main-wrapper">
+    <div class="top-bar">
+        <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+        {% block top_actions %}{% endblock %}
+    </div>
+    <div class="content-area">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for cat, msg in messages %}
+                <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
+                    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>
+

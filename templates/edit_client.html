@@ -1,32 +1,39 @@
 {% extends "base.html" %}
-
-{% block title %}Редактирование клиента - AltaiGlobal{% endblock %}
+{% block title %}Редактировать клиента — AltaiGlobal{% endblock %}
+{% block page_title %}Редактировать клиента{% endblock %}
 
 {% block content %}
-<h1>Редактирование клиента</h1>
-
-<div class="row">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <form method="POST">
-                    <div class="mb-3">
-                        <label for="name" class="form-label">Имя</label>
-                        <input type="text" class="form-control" id="name" name="name" value="{{ client.name }}" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="phone" class="form-label">Телефон</label>
-                        <input type="text" class="form-control" id="phone" name="phone" value="{{ client.phone }}" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="address" class="form-label">Адрес</label>
-                        <input type="text" class="form-control" id="address" name="address" value="{{ client.address }}" required>
-                    </div>
-                    <button type="submit" class="btn btn-success">Сохранить</button>
-                    <a href="/clients" class="btn btn-secondary">Отмена</a>
-                </form>
+<div class="row justify-content-center">
+<div class="col-12 col-md-7 col-lg-5">
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        <form method="POST" novalidate>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Имя <span class="text-danger">*</span></label>
+                <input type="text" name="name" class="form-control" required value="{{ client.name }}">
             </div>
-        </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Телефон <span class="text-danger">*</span></label>
+                <input type="tel" name="phone" class="form-control" required value="{{ client.phone }}">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">ИНН</label>
+                <input type="text" name="inn" class="form-control" value="{{ client.inn }}">
+            </div>
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Адрес <span class="text-danger">*</span></label>
+                <input type="text" name="address" class="form-control" required value="{{ client.address }}">
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning flex-fill"><i class="bi bi-check-lg me-1"></i>Обновить</button>
+                <a href="/clients" class="btn btn-outline-secondary">Отмена</a>
+            </div>
+        </form>
     </div>
+</div>
+</div>
 </div>
 {% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}История продаж — AltaiGlobal{% endblock %}
+{% block page_title %}История продаж{% endblock %}
+{% block top_actions %}
+<a href="/sales" class="btn btn-primary btn-sm ms-auto"><i class="bi bi-cart-plus me-1"></i>Новая продажа</a>
+{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom">
+        <form class="row g-2" method="get">
+            <div class="col-12 col-md-5">
+                <input type="search" name="q" class="form-control form-control-sm" placeholder="Поиск по клиенту…" value="{{ search }}">
+            </div>
+            <div class="col-6 col-md-3">
+                <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
+            </div>
+            <div class="col-6 col-md-3">
+                <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
+            </div>
+            <div class="col-12 col-md-1 d-flex gap-1">
+                <button class="btn btn-sm btn-outline-secondary flex-fill" type="submit"><i class="bi bi-search"></i></button>
+                {% if search or date_from or date_to %}
+                <a href="/sales-list" class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    <div class="card-body p-0">
+        {% if sales %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>#</th><th>Клиент</th><th>Товар</th><th>Кол-во</th><th>Сумма</th><th>Дата</th><th class="text-end">Действия</th></tr>
+                </thead>
+                <tbody>
+                    {% for s in sales %}
+                    <tr>
+                        <td class="text-muted">{{ s.id }}</td>
+                        <td>{{ s.client.name }}</td>
+                        <td>{{ s.product.name }}</td>
+                        <td>{{ s.quantity }}</td>
+                        <td class="fw-semibold">{{ "%.2f"|format(s.total_price) }} ₸</td>
+                        <td class="text-muted small">{{ s.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <td class="text-end">
+                            <form method="POST" action="/delete-sale/{{ s.id }}" class="d-inline" onsubmit="return confirm('Удалить эту продажу?')">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light fw-bold">
+                    <tr>
+                        <td colspan="4" class="text-end">Итого:</td>
+                        <td>{{ "%.2f"|format(sales|sum(attribute='total_price')) }} ₸</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-receipt fs-1 d-block mb-3"></i>
+            Продаж не найдено. <a href="/sales">Оформите первую продажу</a>
+        </div>
+        {% endif %}
+    </div>
+    {% if sales %}
+    <div class="card-footer bg-white text-muted small">Записей: {{ sales|length }}</div>
+    {% endif %}
+</div>
+{% endblock %}

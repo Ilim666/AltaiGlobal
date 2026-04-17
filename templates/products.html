@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Товары — AltaiGlobal{% endblock %}
+{% block page_title %}Товары{% endblock %}
+{% block top_actions %}
+<a href="/add-product" class="btn btn-success btn-sm ms-auto"><i class="bi bi-plus-square me-1"></i>Добавить</a>
+{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom">
+        <form class="d-flex gap-2" method="get">
+            <input type="search" name="q" class="form-control form-control-sm" placeholder="Поиск по названию…" value="{{ search }}">
+            <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+            {% if search %}<a href="/products" class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></a>{% endif %}
+        </form>
+    </div>
+    <div class="card-body p-0">
+        {% if products %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>#</th><th>Название</th><th>Цена</th><th>Остаток</th><th>Дата добавления</th><th class="text-end">Действия</th></tr>
+                </thead>
+                <tbody>
+                    {% for p in products %}
+                    <tr>
+                        <td class="text-muted">{{ p.id }}</td>
+                        <td class="fw-semibold">{{ p.name }}</td>
+                        <td>{{ "%.2f"|format(p.price) }}</td>
+                        <td>
+                            {% if p.quantity == 0 %}
+                            <span class="badge bg-danger">Нет</span>
+                            {% elif p.quantity < 5 %}
+                            <span class="badge bg-warning text-dark">{{ p.quantity }} шт.</span>
+                            {% else %}
+                            <span class="badge bg-success">{{ p.quantity }} шт.</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ p.created_at.strftime('%d.%m.%Y') }}</td>
+                        <td class="text-end">
+                            <a href="/edit-product/{{ p.id }}" class="btn btn-sm btn-outline-warning me-1"><i class="bi bi-pencil"></i></a>
+                            <form method="POST" action="/delete-product/{{ p.id }}" class="d-inline" onsubmit="return confirm('Удалить товар «{{ p.name }}»?')">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-box-seam fs-1 d-block mb-3"></i>
+            {% if search %}Товаров по запросу «{{ search }}» не найдено.{% else %}Товаров ещё нет. <a href="/add-product">Добавьте первый!</a>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% if products %}
+    <div class="card-footer bg-white text-muted small">Всего товаров: {{ products|length }}</div>
+    {% endif %}
+</div>
+{% endblock %}

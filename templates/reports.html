@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Отчёты - AltaiGlobal{% endblock %}
+
+{% block content %}
+<h1>Отчёты</h1>
+
+<div class="row g-4 mt-1">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">📊 Отчёт по продажам</h5>
+                <p class="card-text">Просмотр всех продаж с общей суммой выручки.</p>
+                <a href="/reports/sales" class="btn btn-primary">Открыть</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">👥 Отчёт по клиентам</h5>
+                <p class="card-text">Статистика покупок по каждому клиенту.</p>
+                <a href="/reports/clients" class="btn btn-primary">Открыть</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">📦 Отчёт по товарам</h5>
+                <p class="card-text">Продажи и выручка по каждому товару.</p>
+                <a href="/reports/products" class="btn btn-primary">Открыть</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

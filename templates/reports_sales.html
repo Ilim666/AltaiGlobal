@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Отчёт по продажам - AltaiGlobal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Отчёт по продажам</h1>
+    <a href="/reports" class="btn btn-secondary">← Назад к отчётам</a>
+</div>
+
+<div class="alert alert-info">
+    <strong>Общая выручка:</strong> {{ "%.2f"|format(total) }} сом
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if sales %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Клиент</th>
+                    <th>Товар</th>
+                    <th>Количество</th>
+                    <th>Итого (сом)</th>
+                    <th>Дата</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in sales %}
+                <tr>
+                    <td>{{ sale.id }}</td>
+                    <td>{{ sale.client.name }}</td>
+                    <td>{{ sale.product.name }}</td>
+                    <td>{{ sale.quantity }}</td>
+                    <td>{{ "%.2f"|format(sale.total_price) }}</td>
+                    <td>{{ sale.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="alert alert-warning">Продаж нет.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

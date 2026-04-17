@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Отчёт по товарам - AltaiGlobal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Отчёт по товарам</h1>
+    <a href="/reports" class="btn btn-secondary">← Назад к отчётам</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if data %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Товар</th>
+                    <th>Цена (сом)</th>
+                    <th>В наличии</th>
+                    <th>Продано (шт.)</th>
+                    <th>Выручка (сом)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                <tr>
+                    <td>{{ row.product.name }}</td>
+                    <td>{{ "%.2f"|format(row.product.price) }}</td>
+                    <td>{{ row.product.quantity }}</td>
+                    <td>{{ row.sold_qty }}</td>
+                    <td>{{ "%.2f"|format(row.revenue) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="alert alert-warning">Товаров нет.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

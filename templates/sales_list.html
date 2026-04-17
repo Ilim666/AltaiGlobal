@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}История продаж - AltaiGlobal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>История продаж</h1>
+    <a href="/sales" class="btn btn-primary">+ Новая продажа</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Список продаж ({{ sales|length }})</h5>
+    </div>
+    <div class="card-body">
+        {% if sales %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Клиент</th>
+                    <th>Товар</th>
+                    <th>Количество</th>
+                    <th>Итого (сом)</th>
+                    <th>Дата</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in sales %}
+                <tr>
+                    <td>{{ sale.id }}</td>
+                    <td>{{ sale.client.name }}</td>
+                    <td>{{ sale.product.name }}</td>
+                    <td>{{ sale.quantity }}</td>
+                    <td>{{ "%.2f"|format(sale.total_price) }}</td>
+                    <td>{{ sale.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                    <td>
+                        <form method="POST" action="/delete-sale/{{ sale.id }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Вы уверены?')">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="alert alert-warning">Продаж ещё нет. Оформите первую продажу!</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

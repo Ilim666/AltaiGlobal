@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Новая продажа - AltaiGlobal{% endblock %}
+
+{% block content %}
+<h1>Новая продажа</h1>
+
+<div class="row">
+    <div class="col-lg-7 col-xl-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Оформить продажу</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="client_id" class="form-label">Клиент</label>
+                        <select class="form-select" id="client_id" name="client_id" required>
+                            <option value="">— Выберите клиента —</option>
+                            {% for client in clients %}
+                            <option value="{{ client.id }}">{{ client.name }} ({{ client.phone }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="product_id" class="form-label">Товар</label>
+                        <select class="form-select" id="product_id" name="product_id" required>
+                            <option value="">— Выберите товар —</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.name }} — {{ "%.2f"|format(product.price) }} сом (в наличии: {{ product.quantity }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Количество</label>
+                        <input type="number" min="1" class="form-control" id="quantity" name="quantity" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">Оформить продажу</button>
+                    <a href="/sales-list" class="btn btn-secondary">История продаж</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

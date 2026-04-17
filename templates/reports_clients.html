@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Отчёт по клиентам - AltaiGlobal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Отчёт по клиентам</h1>
+    <a href="/reports" class="btn btn-secondary">← Назад к отчётам</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if data %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Клиент</th>
+                    <th>Телефон</th>
+                    <th>Количество покупок</th>
+                    <th>Сумма покупок (сом)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                <tr>
+                    <td>{{ row.client.name }}</td>
+                    <td>{{ row.client.phone }}</td>
+                    <td>{{ row.sales_count }}</td>
+                    <td>{{ "%.2f"|format(row.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="alert alert-warning">Клиентов нет.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

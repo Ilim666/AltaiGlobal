@@ -62,6 +62,11 @@
             <nav class="nav flex-column">
                 <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">Добавление клиента</a>
                 <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">Клиенты</a>
+                <a class="nav-link {% if request.path == '/add-product' %}active{% endif %}" href="/add-product">Добавление товара</a>
+                <a class="nav-link {% if request.path == '/products' %}active{% endif %}" href="/products">Товары</a>
+                <a class="nav-link {% if request.path == '/sales' %}active{% endif %}" href="/sales">Новая продажа</a>
+                <a class="nav-link {% if request.path == '/sales-list' %}active{% endif %}" href="/sales-list">История продаж</a>
+                <a class="nav-link {% if request.path.startswith('/reports') %}active{% endif %}" href="/reports">Отчёты</a>
             </nav>
         </aside>
 

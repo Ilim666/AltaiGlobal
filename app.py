@@ -88,14 +88,19 @@ def add_vehicle():
     return render_template("add_vehicle.html")
 
 
+@app.route("/clients", methods=["GET"])
+def clients():
+    all_clients = Client.query.order_by(Client.id.desc()).all()
+    return render_template("clients.html", clients=all_clients)
+
+
 @app.route("/vehicles", methods=["GET"])
 def vehicles():
-    all_vehicles = (
-        db.session.query(Vehicle)
-        .join(Client)
-        .order_by(Vehicle.id.desc())
-        .all()
-    )
+    client_id = request.args.get("client_id", type=int)
+    query = db.session.query(Vehicle).join(Client).order_by(Vehicle.id.desc())
+    if client_id:
+        query = query.filter(Vehicle.client_id == client_id)
+    all_vehicles = query.all()
     return render_template("vehicles.html", vehicles=all_vehicles)
 
 

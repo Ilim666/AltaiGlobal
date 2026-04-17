@@ -183,6 +183,24 @@
         state.vehicle_color = this.value.trim().length > 0;
         updateSubmit();
     });
+
+    // Enter key navigation
+    const notesInput = document.getElementById('notes');
+    const vehicleFields = [vehicleNumberInput, vehicleBrandInput, vehicleColorInput, notesInput];
+    vehicleFields.forEach(function (field, index) {
+        field.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (index < vehicleFields.length - 1) {
+                    vehicleFields[index + 1].focus();
+                } else {
+                    if (!submitButton.disabled) {
+                        document.getElementById('addVehicleForm').submit();
+                    }
+                }
+            }
+        });
+    });
 })();
 </script>
 {% endblock %}

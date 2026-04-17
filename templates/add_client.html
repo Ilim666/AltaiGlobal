@@ -168,6 +168,24 @@
         state.vehicle_color = this.value.trim().length > 0;
         updateSubmit();
     });
+
+    // Enter key navigation
+    const notesInput = document.getElementById('notes');
+    const fields = [fullNameInput, phoneInput, innInput, vehicleNumberInput, vehicleBrandInput, vehicleColorInput, notesInput];
+    fields.forEach(function (field, index) {
+        field.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (index < fields.length - 1) {
+                    fields[index + 1].focus();
+                } else {
+                    if (!submitButton.disabled) {
+                        document.getElementById('addClientForm').submit();
+                    }
+                }
+            }
+        });
+    });
 })();
 </script>
 {% endblock %}

@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 from flask import Flask, redirect, render_template, request, url_for
@@ -7,6 +8,7 @@ from sqlalchemy import func
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["DEBUG"] = os.environ.get("FLASK_DEBUG", "true").lower() == "true"
 db = SQLAlchemy(app)
 
 
@@ -288,4 +290,4 @@ if __name__ == "__main__":
     with app.app_context():
         db.drop_all()
         db.create_all()
-    app.run(debug=True)
+    app.run(debug=app.config["DEBUG"])

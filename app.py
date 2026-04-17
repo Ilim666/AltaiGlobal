@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 from flask import Flask, redirect, render_template, request, url_for
@@ -7,6 +8,7 @@ from sqlalchemy import func
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["DEBUG"] = os.getenv("FLASK_DEBUG", "true").lower() == "true"
 db = SQLAlchemy(app)
 
 
@@ -286,5 +288,7 @@ def reports_by_date():
 
 if __name__ == "__main__":
     with app.app_context():
+        if os.getenv("RESET_DB", "true").lower() == "true":
+            db.drop_all()
         db.create_all()
     app.run()

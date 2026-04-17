@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Товары — AltaiGlobal CRM{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h4 class="fw-bold mb-0 me-auto"><i class="bi bi-box-seam me-2 text-primary"></i>Товары</h4>
+  <button class="btn btn-primary btn-sm" onclick="openAddModal()"><i class="bi bi-plus-lg me-1"></i>Добавить</button>
+  <a href="/api/export/products" class="btn btn-outline-secondary btn-sm ms-2"><i class="bi bi-download me-1"></i>CSV</a>
+</div>
+
+<div class="card p-3 mb-3">
+  <input type="search" id="searchInput" class="form-control form-control-sm" placeholder="Поиск по названию..." />
+</div>
+
+<div class="card p-3">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Название</th>
+          <th class="text-end">Цена</th>
+          <th class="text-end">Остаток</th>
+          <th class="text-end">Действия</th>
+        </tr>
+      </thead>
+      <tbody id="productsTable">
+        <tr><td colspan="5" class="text-center text-muted py-4">Загрузка...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="text-muted small mt-2" id="productsCount"></div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="productModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title" id="productModalTitle">Добавить товар</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="productId" />
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Название <span class="text-danger">*</span></label>
+          <input type="text" id="productName" class="form-control" placeholder="Название товара" />
+          <div class="invalid-feedback" id="errName"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Цена (₸) <span class="text-danger">*</span></label>
+          <input type="number" id="productPrice" class="form-control" placeholder="0" min="0" step="0.01" />
+          <div class="invalid-feedback" id="errPrice"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Количество <span class="text-danger">*</span></label>
+          <input type="number" id="productQty" class="form-control" placeholder="0" min="0" />
+          <div class="invalid-feedback" id="errQty"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-primary" onclick="saveProduct()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function loadProducts(q) {
+  q = q || '';
+  try {
+    var url = '/api/products' + (q ? '?q=' + encodeURIComponent(q) : '');
+    var list = await apiFetch(url);
+    renderProducts(list);
+  } catch(e) {
+    document.getElementById('productsTable').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Ошибка загрузки</td></tr>';
+  }
+}
+
+function renderProducts(list) {
+  var tbody = document.getElementById('productsTable');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Товаров не найдено</td></tr>';
+    document.getElementById('productsCount').textContent = '';
+    return;
+  }
+  tbody.innerHTML = list.map(function(p) {
+    var qtyBadge = p.quantity <= 5
+      ? '<span class="badge bg-warning text-dark">' + p.quantity + '</span>'
+      : '<span class="badge bg-success">' + p.quantity + '</span>';
+    return '<tr>' +
+      '<td class="text-muted">' + p.id + '</td>' +
+      '<td class="fw-semibold">' + escHtml(p.name) + '</td>' +
+      '<td class="text-end">' + p.price.toLocaleString('ru-RU') + ' ₸</td>' +
+      '<td class="text-end">' + qtyBadge + '</td>' +
+      '<td class="text-end">' +
+        '<button class="btn btn-outline-primary btn-action me-1" onclick="openEditModal(' + p.id + ')"><i class="bi bi-pencil"></i></button>' +
+        '<button class="btn btn-outline-danger btn-action" onclick="deleteProduct(' + p.id + ', \'' + escHtml(p.name).replace(/'/g, "\\'") + '\')"><i class="bi bi-trash"></i></button>' +
+      '</td></tr>';
+  }).join('');
+  document.getElementById('productsCount').textContent = 'Показано: ' + list.length + ' товар(ов)';
+}
+
+function clearErrors() {
+  ['productName','productPrice','productQty'].forEach(function(id) {
+    document.getElementById(id).classList.remove('is-invalid');
+  });
+}
+
+function openAddModal() {
+  document.getElementById('productModalTitle').textContent = 'Добавить товар';
+  document.getElementById('productId').value = '';
+  document.getElementById('productName').value = '';
+  document.getElementById('productPrice').value = '';
+  document.getElementById('productQty').value = '';
+  clearErrors();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('productModal')).show();
+  setTimeout(function() { document.getElementById('productName').focus(); }, 300);
+}
+
+async function openEditModal(id) {
+  try {
+    var p = await apiFetch('/api/products/' + id);
+    document.getElementById('productModalTitle').textContent = 'Редактировать товар';
+    document.getElementById('productId').value = p.id;
+    document.getElementById('productName').value = p.name;
+    document.getElementById('productPrice').value = p.price;
+    document.getElementById('productQty').value = p.quantity;
+    clearErrors();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('productModal')).show();
+  } catch(e) {
+    showToast('Ошибка загрузки товара', 'error');
+  }
+}
+
+async function saveProduct() {
+  clearErrors();
+  var id = document.getElementById('productId').value;
+  var body = {
+    name: document.getElementById('productName').value.trim(),
+    price: parseFloat(document.getElementById('productPrice').value) || 0,
+    quantity: parseInt(document.getElementById('productQty').value) || 0,
+  };
+  try {
+    if (id) {
+      await apiFetch('/api/products/' + id, {method: 'PUT', body: JSON.stringify(body)});
+      showToast('Товар обновлён');
+    } else {
+      await apiFetch('/api/products', {method: 'POST', body: JSON.stringify(body)});
+      showToast('Товар добавлен');
+    }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('productModal')).hide();
+    loadProducts(document.getElementById('searchInput').value);
+  } catch(err) {
+    if (err.errors) {
+      if (err.errors.name) { document.getElementById('productName').classList.add('is-invalid'); document.getElementById('errName').textContent = err.errors.name; }
+      if (err.errors.price) { document.getElementById('productPrice').classList.add('is-invalid'); document.getElementById('errPrice').textContent = err.errors.price; }
+      if (err.errors.quantity) { document.getElementById('productQty').classList.add('is-invalid'); document.getElementById('errQty').textContent = err.errors.quantity; }
+    } else {
+      showToast('Ошибка сохранения', 'error');
+    }
+  }
+}
+
+function deleteProduct(id, name) {
+  confirmDelete('Удалить товар "' + name + '"?', async function() {
+    try {
+      await apiFetch('/api/products/' + id, {method: 'DELETE'});
+      showToast('Товар удалён');
+      loadProducts(document.getElementById('searchInput').value);
+    } catch(e) {
+      showToast('Ошибка удаления', 'error');
+    }
+  });
+}
+
+// Enter key navigation
+['productName','productPrice','productQty'].forEach(function(id, idx, arr) {
+  document.getElementById(id).addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (idx < arr.length - 1) {
+        document.getElementById(arr[idx + 1]).focus();
+      } else {
+        saveProduct();
+      }
+    }
+  });
+});
+
+var searchTimer;
+document.getElementById('searchInput').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  var q = this.value;
+  searchTimer = setTimeout(function() { loadProducts(q); }, 300);
+});
+
+loadProducts();
+</script>
+{% endblock %}

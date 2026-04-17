@@ -1,46 +1,205 @@
 {% extends "base.html" %}
-
-{% block title %}Клиенты - AltaiGlobal{% endblock %}
-
+{% block title %}Клиенты — AltaiGlobal CRM{% endblock %}
 {% block content %}
-<h1>Клиенты</h1>
-
-<div class="card">
-    <div class="card-header">
-        <h5 class="mb-0">Список клиентов ({{ clients|length }})</h5>
-    </div>
-    <div class="card-body">
-        {% if clients %}
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Имя</th>
-                    <th>Телефон</th>
-                    <th>Адрес</th>
-                    <th>Действия</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for client in clients %}
-                <tr>
-                    <td>{{ client.id }}</td>
-                    <td>{{ client.name }}</td>
-                    <td>{{ client.phone }}</td>
-                    <td>{{ client.address }}</td>
-                    <td>
-                        <a href="/client/edit/{{ client.id }}" class="btn btn-sm btn-warning">Редактировать</a>
-                        <form method="POST" action="/client/delete/{{ client.id }}" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Вы уверены?')">Удалить</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="alert alert-warning">Клиентов нет. Добавьте первого клиента!</p>
-        {% endif %}
-    </div>
+<div class="d-flex align-items-center mb-3">
+  <h4 class="fw-bold mb-0 me-auto"><i class="bi bi-people me-2 text-primary"></i>Клиенты</h4>
+  <button class="btn btn-primary btn-sm" onclick="openAddModal()"><i class="bi bi-plus-lg me-1"></i>Добавить</button>
+  <a href="/api/export/clients" class="btn btn-outline-secondary btn-sm ms-2"><i class="bi bi-download me-1"></i>CSV</a>
 </div>
+
+<div class="card p-3 mb-3">
+  <input type="search" id="searchInput" class="form-control form-control-sm" placeholder="Поиск по ФИО, телефону, ИНН..." />
+</div>
+
+<div class="card p-3">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>ФИО</th>
+          <th>Телефон</th>
+          <th>ИНН</th>
+          <th>Дата добавления</th>
+          <th class="text-end">Действия</th>
+        </tr>
+      </thead>
+      <tbody id="clientsTable">
+        <tr><td colspan="6" class="text-center text-muted py-4">Загрузка...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="text-muted small mt-2" id="clientsCount"></div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="clientModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title" id="clientModalTitle">Добавить клиента</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="clientId" />
+        <div class="mb-3">
+          <label class="form-label fw-semibold">ФИО <span class="text-danger">*</span></label>
+          <input type="text" id="clientName" class="form-control" placeholder="Иванов Иван Иванович" />
+          <div class="invalid-feedback" id="errName"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Телефон <span class="text-danger">*</span></label>
+          <input type="text" id="clientPhone" class="form-control" placeholder="+7 (777) 123-45-67" />
+          <div class="invalid-feedback" id="errPhone"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">ИНН</label>
+          <input type="text" id="clientInn" class="form-control" placeholder="123456789012" />
+          <div class="invalid-feedback" id="errInn"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-primary" id="clientSaveBtn" onclick="saveClient()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+var allClients = [];
+
+async function loadClients(q) {
+  q = q || '';
+  try {
+    var url = '/api/clients' + (q ? '?q=' + encodeURIComponent(q) : '');
+    allClients = await apiFetch(url);
+    renderClients(allClients);
+  } catch(e) {
+    document.getElementById('clientsTable').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Ошибка загрузки</td></tr>';
+  }
+}
+
+function renderClients(list) {
+  var tbody = document.getElementById('clientsTable');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Клиентов не найдено</td></tr>';
+    document.getElementById('clientsCount').textContent = '';
+    return;
+  }
+  tbody.innerHTML = list.map(function(c) {
+    return '<tr>' +
+      '<td class="text-muted">' + c.id + '</td>' +
+      '<td class="fw-semibold">' + escHtml(c.full_name) + '</td>' +
+      '<td>' + escHtml(c.phone) + '</td>' +
+      '<td>' + escHtml(c.inn) + '</td>' +
+      '<td class="text-muted small">' + c.created_at + '</td>' +
+      '<td class="text-end">' +
+        '<button class="btn btn-outline-primary btn-action me-1" onclick="openEditModal(' + c.id + ')"><i class="bi bi-pencil"></i></button>' +
+        '<button class="btn btn-outline-danger btn-action" onclick="deleteClient(' + c.id + ', \'' + escHtml(c.full_name).replace(/'/g, "\\'") + '\')"><i class="bi bi-trash"></i></button>' +
+      '</td></tr>';
+  }).join('');
+  document.getElementById('clientsCount').textContent = 'Показано: ' + list.length + ' клиент(ов)';
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function clearErrors() {
+  ['clientName','clientPhone','clientInn'].forEach(function(id) {
+    document.getElementById(id).classList.remove('is-invalid');
+  });
+}
+
+function openAddModal() {
+  document.getElementById('clientModalTitle').textContent = 'Добавить клиента';
+  document.getElementById('clientId').value = '';
+  document.getElementById('clientName').value = '';
+  document.getElementById('clientPhone').value = '';
+  document.getElementById('clientInn').value = '';
+  clearErrors();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('clientModal')).show();
+  setTimeout(function() { document.getElementById('clientName').focus(); }, 300);
+}
+
+async function openEditModal(id) {
+  try {
+    var c = await apiFetch('/api/clients/' + id);
+    document.getElementById('clientModalTitle').textContent = 'Редактировать клиента';
+    document.getElementById('clientId').value = c.id;
+    document.getElementById('clientName').value = c.full_name;
+    document.getElementById('clientPhone').value = c.phone;
+    document.getElementById('clientInn').value = c.inn;
+    clearErrors();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('clientModal')).show();
+  } catch(e) {
+    showToast('Ошибка загрузки клиента', 'error');
+  }
+}
+
+async function saveClient() {
+  clearErrors();
+  var id = document.getElementById('clientId').value;
+  var body = {
+    full_name: document.getElementById('clientName').value.trim(),
+    phone: document.getElementById('clientPhone').value.trim(),
+    inn: document.getElementById('clientInn').value.trim(),
+  };
+  try {
+    if (id) {
+      await apiFetch('/api/clients/' + id, {method: 'PUT', body: JSON.stringify(body)});
+      showToast('Клиент обновлён');
+    } else {
+      await apiFetch('/api/clients', {method: 'POST', body: JSON.stringify(body)});
+      showToast('Клиент добавлен');
+    }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('clientModal')).hide();
+    loadClients(document.getElementById('searchInput').value);
+  } catch(err) {
+    if (err.errors) {
+      if (err.errors.full_name) { document.getElementById('clientName').classList.add('is-invalid'); document.getElementById('errName').textContent = err.errors.full_name; }
+      if (err.errors.phone) { document.getElementById('clientPhone').classList.add('is-invalid'); document.getElementById('errPhone').textContent = err.errors.phone; }
+    } else {
+      showToast('Ошибка сохранения', 'error');
+    }
+  }
+}
+
+function deleteClient(id, name) {
+  confirmDelete('Удалить клиента "' + name + '"?', async function() {
+    try {
+      await apiFetch('/api/clients/' + id, {method: 'DELETE'});
+      showToast('Клиент удалён');
+      loadClients(document.getElementById('searchInput').value);
+    } catch(e) {
+      showToast('Ошибка удаления', 'error');
+    }
+  });
+}
+
+// Enter key navigation in modal
+['clientName','clientPhone','clientInn'].forEach(function(id, idx, arr) {
+  document.getElementById(id).addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (idx < arr.length - 1) {
+        document.getElementById(arr[idx + 1]).focus();
+      } else {
+        saveClient();
+      }
+    }
+  });
+});
+
+var searchTimer;
+document.getElementById('searchInput').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  var q = this.value;
+  searchTimer = setTimeout(function() { loadClients(q); }, 300);
+});
+
+loadClients();
+</script>
 {% endblock %}

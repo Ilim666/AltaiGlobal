@@ -1,22 +1,90 @@
 {% extends "base.html" %}
-
+{% block title %}Дашборд — AltaiGlobal CRM{% endblock %}
 {% block content %}
-<div class="row">
-    <div class="col-md-8 mx-auto">
-        <h1>Добро пожаловать в AltaiGlobal</h1>
-        <p class="lead">Система учета продаж для управления клиентами, продажами и долгами</p>
-        
-        <div class="alert alert-info">
-            <h4>Функции системы:</h4>
-            <ul>
-                <li>✅ Управление клиентами</li>
-                <li>📊 Учет продаж</li>
-                <li>💰 Контроль платежей</li>
-                <li>📈 Учет долгов</li>
-            </ul>
-        </div>
+<h4 class="mb-4 fw-bold"><i class="bi bi-speedometer2 me-2 text-primary"></i>Дашборд</h4>
 
-        <a href="/clients" class="btn btn-primary btn-lg">Начать работу</a>
+<div class="row g-3 mb-4" id="statsRow">
+  <div class="col-6 col-md-3">
+    <div class="card stat-card p-3 text-center">
+      <div class="text-muted small mb-1">Выручка</div>
+      <div class="fw-bold fs-4 text-primary" id="statRevenue">—</div>
     </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card p-3 text-center">
+      <div class="text-muted small mb-1">Продажи</div>
+      <div class="fw-bold fs-4 text-success" id="statSales">—</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card p-3 text-center">
+      <div class="text-muted small mb-1">Клиенты</div>
+      <div class="fw-bold fs-4 text-info" id="statClients">—</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card p-3 text-center">
+      <div class="text-muted small mb-1">Товаров мало</div>
+      <div class="fw-bold fs-4 text-warning" id="statLowStock">—</div>
+    </div>
+  </div>
 </div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h6 class="fw-bold mb-3"><i class="bi bi-cart3 me-1 text-success"></i>Последние продажи</h6>
+      <div id="recentSales" class="text-muted">Загрузка...</div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h6 class="fw-bold mb-3"><i class="bi bi-box-seam me-1 text-warning"></i>Товары с низким запасом (≤5)</h6>
+      <div id="lowStockList" class="text-muted">Загрузка...</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(async function() {
+  try {
+    var stats = await apiFetch('/api/reports?type=summary');
+    document.getElementById('statRevenue').textContent = stats.total_revenue.toLocaleString('ru-RU') + ' ₸';
+    document.getElementById('statSales').textContent = stats.total_sales;
+    document.getElementById('statClients').textContent = stats.total_clients;
+    document.getElementById('statLowStock').textContent = stats.low_stock;
+  } catch(e) {}
+
+  try {
+    var sales = await apiFetch('/api/sales');
+    var recent = sales.slice(0, 7);
+    if (recent.length === 0) {
+      document.getElementById('recentSales').textContent = 'Нет продаж';
+    } else {
+      var rows = recent.map(function(s) {
+        return '<tr><td>' + s.date + '</td><td>' + escHtml(s.client_name) + '</td><td>' + escHtml(s.product_name) + '</td><td class="text-end fw-bold">' + s.total.toLocaleString('ru-RU') + ' ₸</td></tr>';
+      }).join('');
+      document.getElementById('recentSales').innerHTML = '<table class="table table-sm mb-0"><thead><tr><th>Дата</th><th>Клиент</th><th>Товар</th><th class="text-end">Сумма</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+  } catch(e) {}
+
+  try {
+    var products = await apiFetch('/api/products');
+    var low = products.filter(function(p) { return p.quantity <= 5; });
+    if (low.length === 0) {
+      document.getElementById('lowStockList').textContent = 'Все товары в норме ✅';
+    } else {
+      var items = low.map(function(p) {
+        return '<li class="list-group-item d-flex justify-content-between align-items-center">' + escHtml(p.name) + '<span class="badge bg-warning text-dark">' + p.quantity + ' шт.</span></li>';
+      }).join('');
+      document.getElementById('lowStockList').innerHTML = '<ul class="list-group list-group-flush">' + items + '</ul>';
+    }
+  } catch(e) {}
+})();
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
 {% endblock %}

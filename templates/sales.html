@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Продажи — AltaiGlobal CRM{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h4 class="fw-bold mb-0 me-auto"><i class="bi bi-cart3 me-2 text-primary"></i>Продажи</h4>
+  <button class="btn btn-primary btn-sm" onclick="openAddModal()"><i class="bi bi-plus-lg me-1"></i>Оформить продажу</button>
+  <a href="/api/export/sales" class="btn btn-outline-secondary btn-sm ms-2"><i class="bi bi-download me-1"></i>CSV</a>
+</div>
+
+<!-- Filters -->
+<div class="card p-3 mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Клиент</label>
+      <select id="filterClient" class="form-select form-select-sm">
+        <option value="">Все клиенты</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">С даты</label>
+      <input type="date" id="filterFrom" class="form-control form-control-sm" />
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">По дату</label>
+      <input type="date" id="filterTo" class="form-control form-control-sm" />
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+      <button class="btn btn-primary btn-sm w-100" onclick="loadSales()"><i class="bi bi-funnel me-1"></i>Фильтр</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="resetFilters()"><i class="bi bi-x-lg"></i></button>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Дата</th>
+          <th>Клиент</th>
+          <th>Товар</th>
+          <th class="text-end">Кол-во</th>
+          <th class="text-end">Сумма</th>
+          <th class="text-end">Действия</th>
+        </tr>
+      </thead>
+      <tbody id="salesTable">
+        <tr><td colspan="7" class="text-center text-muted py-4">Загрузка...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="d-flex justify-content-between align-items-center mt-2">
+    <div class="text-muted small" id="salesCount"></div>
+    <div class="fw-bold" id="salesTotal"></div>
+  </div>
+</div>
+
+<!-- Add Sale Modal -->
+<div class="modal fade" id="saleModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Оформить продажу</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Клиент <span class="text-danger">*</span></label>
+          <select id="saleClient" class="form-select">
+            <option value="">— Выберите клиента —</option>
+          </select>
+          <div class="invalid-feedback" id="errClient"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Товар <span class="text-danger">*</span></label>
+          <select id="saleProduct" class="form-select" onchange="updateTotal()">
+            <option value="">— Выберите товар —</option>
+          </select>
+          <div class="invalid-feedback" id="errProduct"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Количество <span class="text-danger">*</span></label>
+          <input type="number" id="saleQty" class="form-control" value="1" min="1" oninput="updateTotal()" />
+          <div class="invalid-feedback" id="errQty"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Дата продажи</label>
+          <input type="datetime-local" id="saleDate" class="form-control" />
+        </div>
+        <div class="alert alert-info py-2 mb-0" id="saleTotalPreview" style="display:none">
+          <strong>Итого:</strong> <span id="saleTotalAmt">0</span> ₸
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-primary" onclick="saveSale()"><i class="bi bi-check2 me-1"></i>Оформить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+var productsCache = [];
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function nowLocalDatetime() {
+  var d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+async function loadSelects() {
+  try {
+    var clients = await apiFetch('/api/clients');
+    var cSel = document.getElementById('saleClient');
+    var fSel = document.getElementById('filterClient');
+    clients.forEach(function(c) {
+      var opt = new Option(c.full_name + ' (' + c.phone + ')', c.id);
+      cSel.add(opt.cloneNode(true));
+      fSel.add(opt);
+    });
+  } catch(e) {}
+
+  try {
+    productsCache = await apiFetch('/api/products');
+    var pSel = document.getElementById('saleProduct');
+    productsCache.forEach(function(p) {
+      pSel.add(new Option(p.name + ' — ' + p.price.toLocaleString('ru-RU') + ' ₸ (ост. ' + p.quantity + ')', p.id));
+    });
+  } catch(e) {}
+}
+
+function updateTotal() {
+  var pid = parseInt(document.getElementById('saleProduct').value);
+  var qty = parseInt(document.getElementById('saleQty').value) || 0;
+  var product = productsCache.find(function(p) { return p.id === pid; });
+  if (product && qty > 0) {
+    var total = product.price * qty;
+    document.getElementById('saleTotalAmt').textContent = total.toLocaleString('ru-RU');
+    document.getElementById('saleTotalPreview').style.display = '';
+  } else {
+    document.getElementById('saleTotalPreview').style.display = 'none';
+  }
+}
+
+async function loadSales() {
+  var params = new URLSearchParams();
+  var cid = document.getElementById('filterClient').value;
+  var from = document.getElementById('filterFrom').value;
+  var to = document.getElementById('filterTo').value;
+  if (cid) params.set('client_id', cid);
+  if (from) params.set('date_from', from);
+  if (to) params.set('date_to', to);
+  try {
+    var list = await apiFetch('/api/sales?' + params.toString());
+    renderSales(list);
+  } catch(e) {
+    document.getElementById('salesTable').innerHTML = '<tr><td colspan="7" class="text-center text-danger">Ошибка загрузки</td></tr>';
+  }
+}
+
+function renderSales(list) {
+  var tbody = document.getElementById('salesTable');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Продаж не найдено</td></tr>';
+    document.getElementById('salesCount').textContent = '';
+    document.getElementById('salesTotal').textContent = '';
+    return;
+  }
+  tbody.innerHTML = list.map(function(s) {
+    return '<tr>' +
+      '<td class="text-muted">' + s.id + '</td>' +
+      '<td class="small">' + s.date + '</td>' +
+      '<td>' + escHtml(s.client_name) + '</td>' +
+      '<td>' + escHtml(s.product_name) + '</td>' +
+      '<td class="text-end">' + s.quantity + '</td>' +
+      '<td class="text-end fw-bold">' + s.total.toLocaleString('ru-RU') + ' ₸</td>' +
+      '<td class="text-end">' +
+        '<button class="btn btn-outline-danger btn-action" onclick="deleteSale(' + s.id + ')"><i class="bi bi-trash"></i></button>' +
+      '</td></tr>';
+  }).join('');
+  var total = list.reduce(function(sum, s) { return sum + s.total; }, 0);
+  document.getElementById('salesCount').textContent = 'Показано: ' + list.length + ' продаж(и)';
+  document.getElementById('salesTotal').textContent = 'Итого: ' + total.toLocaleString('ru-RU') + ' ₸';
+}
+
+function openAddModal() {
+  document.getElementById('saleClient').value = '';
+  document.getElementById('saleProduct').value = '';
+  document.getElementById('saleQty').value = 1;
+  document.getElementById('saleDate').value = nowLocalDatetime();
+  document.getElementById('saleTotalPreview').style.display = 'none';
+  ['saleClient','saleProduct','saleQty'].forEach(function(id) {
+    document.getElementById(id).classList.remove('is-invalid');
+  });
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('saleModal')).show();
+}
+
+async function saveSale() {
+  ['saleClient','saleProduct','saleQty'].forEach(function(id) {
+    document.getElementById(id).classList.remove('is-invalid');
+  });
+  var body = {
+    client_id: parseInt(document.getElementById('saleClient').value) || 0,
+    product_id: parseInt(document.getElementById('saleProduct').value) || 0,
+    quantity: parseInt(document.getElementById('saleQty').value) || 0,
+    date: document.getElementById('saleDate').value,
+  };
+  try {
+    await apiFetch('/api/sales', {method: 'POST', body: JSON.stringify(body)});
+    showToast('Продажа оформлена');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('saleModal')).hide();
+    // Refresh products cache (stock changed)
+    productsCache = await apiFetch('/api/products');
+    loadSales();
+  } catch(err) {
+    if (err.errors) {
+      if (err.errors.client_id) { document.getElementById('saleClient').classList.add('is-invalid'); document.getElementById('errClient').textContent = err.errors.client_id; }
+      if (err.errors.product_id) { document.getElementById('saleProduct').classList.add('is-invalid'); document.getElementById('errProduct').textContent = err.errors.product_id; }
+      if (err.errors.quantity) { document.getElementById('saleQty').classList.add('is-invalid'); document.getElementById('errQty').textContent = err.errors.quantity; }
+    } else {
+      showToast('Ошибка оформления', 'error');
+    }
+  }
+}
+
+function deleteSale(id) {
+  confirmDelete('Отменить продажу #' + id + '? Товар вернётся на склад.', async function() {
+    try {
+      await apiFetch('/api/sales/' + id, {method: 'DELETE'});
+      showToast('Продажа отменена');
+      productsCache = await apiFetch('/api/products');
+      loadSales();
+    } catch(e) {
+      showToast('Ошибка удаления', 'error');
+    }
+  });
+}
+
+function resetFilters() {
+  document.getElementById('filterClient').value = '';
+  document.getElementById('filterFrom').value = '';
+  document.getElementById('filterTo').value = '';
+  loadSales();
+}
+
+loadSelects().then(function() { loadSales(); });
+</script>
+{% endblock %}

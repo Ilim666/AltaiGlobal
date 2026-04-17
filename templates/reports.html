@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Отчёты — AltaiGlobal CRM{% endblock %}
+{% block content %}
+<h4 class="fw-bold mb-4"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Отчёты</h4>
+
+<!-- Filters -->
+<div class="card p-3 mb-4">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Тип отчёта</label>
+      <select id="reportType" class="form-select form-select-sm" onchange="loadReport()">
+        <option value="summary">Сводка</option>
+        <option value="by_client">По клиентам</option>
+        <option value="by_product">По товарам</option>
+        <option value="by_date">По датам</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">С даты</label>
+      <input type="date" id="repFrom" class="form-control form-control-sm" />
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">По дату</label>
+      <input type="date" id="repTo" class="form-control form-control-sm" />
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+      <button class="btn btn-primary btn-sm w-100" onclick="loadReport()"><i class="bi bi-bar-chart me-1"></i>Построить</button>
+      <button class="btn btn-outline-success btn-sm" onclick="exportReport()" title="Экспорт CSV"><i class="bi bi-download"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Summary cards -->
+<div id="summarySection" class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="text-muted small mb-1">Общая выручка</div>
+      <div class="fw-bold fs-4 text-primary" id="sumRevenue">—</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="text-muted small mb-1">Кол-во продаж</div>
+      <div class="fw-bold fs-4 text-success" id="sumSales">—</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="text-muted small mb-1">Клиентов</div>
+      <div class="fw-bold fs-4 text-info" id="sumClients">—</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="text-muted small mb-1">Товаров всего</div>
+      <div class="fw-bold fs-4 text-warning" id="sumProducts">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- Detailed table -->
+<div class="card p-3" id="detailSection" style="display:none">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" id="reportTable">
+      <thead id="reportHead"></thead>
+      <tbody id="reportBody"></tbody>
+    </table>
+  </div>
+  <div class="text-muted small mt-2" id="reportFooter"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+var lastReportData = [];
+var lastReportType = 'summary';
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function loadReport() {
+  var type = document.getElementById('reportType').value;
+  var from = document.getElementById('repFrom').value;
+  var to = document.getElementById('repTo').value;
+  lastReportType = type;
+
+  var params = new URLSearchParams({type: type});
+  if (from) params.set('date_from', from);
+  if (to) params.set('date_to', to);
+
+  try {
+    var data = await apiFetch('/api/reports?' + params.toString());
+    lastReportData = data;
+
+    if (type === 'summary') {
+      document.getElementById('summarySection').style.display = '';
+      document.getElementById('detailSection').style.display = 'none';
+      document.getElementById('sumRevenue').textContent = data.total_revenue.toLocaleString('ru-RU') + ' ₸';
+      document.getElementById('sumSales').textContent = data.total_sales;
+      document.getElementById('sumClients').textContent = data.total_clients;
+      document.getElementById('sumProducts').textContent = data.total_products;
+    } else {
+      document.getElementById('summarySection').style.display = 'none';
+      document.getElementById('detailSection').style.display = '';
+      renderDetailTable(type, data);
+    }
+  } catch(e) {
+    showToast('Ошибка загрузки отчёта', 'error');
+  }
+}
+
+function renderDetailTable(type, rows) {
+  var head = document.getElementById('reportHead');
+  var body = document.getElementById('reportBody');
+
+  if (type === 'by_client') {
+    head.innerHTML = '<tr><th>Клиент</th><th class="text-end">Продаж</th><th class="text-end">Сумма</th></tr>';
+    body.innerHTML = rows.map(function(r) {
+      return '<tr><td>' + escHtml(r.client) + '</td><td class="text-end">' + r.sales_count + '</td><td class="text-end fw-bold">' + r.total.toLocaleString('ru-RU') + ' ₸</td></tr>';
+    }).join('');
+  } else if (type === 'by_product') {
+    head.innerHTML = '<tr><th>Товар</th><th class="text-end">Продано (шт.)</th><th class="text-end">Сумма</th></tr>';
+    body.innerHTML = rows.map(function(r) {
+      return '<tr><td>' + escHtml(r.product) + '</td><td class="text-end">' + r.quantity_sold + '</td><td class="text-end fw-bold">' + r.total.toLocaleString('ru-RU') + ' ₸</td></tr>';
+    }).join('');
+  } else if (type === 'by_date') {
+    head.innerHTML = '<tr><th>Дата</th><th class="text-end">Продаж</th><th class="text-end">Сумма</th></tr>';
+    body.innerHTML = rows.map(function(r) {
+      return '<tr><td>' + escHtml(r.date) + '</td><td class="text-end">' + r.sales_count + '</td><td class="text-end fw-bold">' + r.total.toLocaleString('ru-RU') + ' ₸</td></tr>';
+    }).join('');
+  }
+
+  var grandTotal = rows.reduce(function(s, r) { return s + r.total; }, 0);
+  document.getElementById('reportFooter').textContent = 'Строк: ' + rows.length + ' | Итого: ' + grandTotal.toLocaleString('ru-RU') + ' ₸';
+}
+
+function exportReport() {
+  var type = lastReportType;
+  if (type === 'summary') {
+    // Export all sales
+    window.location.href = '/api/export/sales';
+    return;
+  }
+  if (!lastReportData.length) { showToast('Нет данных для экспорта', 'error'); return; }
+
+  var headers, rows;
+  if (type === 'by_client') {
+    headers = ['Клиент', 'Продаж', 'Сумма'];
+    rows = lastReportData.map(function(r) { return [r.client, r.sales_count, r.total]; });
+  } else if (type === 'by_product') {
+    headers = ['Товар', 'Продано (шт.)', 'Сумма'];
+    rows = lastReportData.map(function(r) { return [r.product, r.quantity_sold, r.total]; });
+  } else {
+    headers = ['Дата', 'Продаж', 'Сумма'];
+    rows = lastReportData.map(function(r) { return [r.date, r.sales_count, r.total]; });
+  }
+
+  var csv = '\ufeff' + [headers].concat(rows).map(function(row) {
+    return row.map(function(cell) {
+      var s = String(cell);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) s = '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    }).join(',');
+  }).join('\r\n');
+
+  var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'report_' + type + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+loadReport();
+</script>
+{% endblock %}

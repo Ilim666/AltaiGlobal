@@ -168,6 +168,28 @@
         state.vehicle_color = this.value.trim().length > 0;
         updateSubmit();
     });
+
+    // Enter navigation
+    const fieldOrder = ['full_name', 'phone_number', 'inn', 'vehicle_number', 'vehicle_brand', 'vehicle_color', 'notes'];
+    fieldOrder.forEach((fieldId, idx) => {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const nextId = fieldOrder[idx + 1];
+                    const nextField = nextId ? document.getElementById(nextId) : null;
+                    if (nextField) {
+                        nextField.focus();
+                    } else {
+                        if (!submitButton.disabled) {
+                            document.getElementById('addClientForm').submit();
+                        }
+                    }
+                }
+            });
+        }
+    });
 })();
 </script>
 {% endblock %}

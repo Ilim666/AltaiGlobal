@@ -168,7 +168,12 @@ def sales():
 
         product = Product.query.get_or_404(int(product_id))
         qty = int(quantity)
+        if qty <= 0 or qty > product.quantity:
+            error = f"Недостаточно товара на складе. В наличии: {product.quantity} шт."
+            return render_template("sales.html", clients=all_clients, products=all_products, error=error)
+
         total_price = product.price * qty
+        product.quantity -= qty
 
         sale = Sale(
             client_id=int(client_id),
@@ -192,6 +197,7 @@ def sales_list():
 @app.route("/delete-sale/<int:id>", methods=["POST"])
 def delete_sale(id):
     sale = Sale.query.get_or_404(id)
+    sale.product.quantity += sale.quantity
     db.session.delete(sale)
     db.session.commit()
     return redirect(url_for("sales_list"))

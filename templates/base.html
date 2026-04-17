@@ -70,7 +70,7 @@
             <nav class="nav flex-column">
                 <span class="nav-section-label">Клиенты</span>
                 <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">➕ Добавить клиента</a>
-                <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">👥 Список клиентов</a>
+                <a class="nav-link {% if request.path == '/clients' or request.path.startswith('/edit-client') %}active{% endif %}" href="/clients">👥 Список клиентов</a>
 
                 <span class="nav-section-label">Товары</span>
                 <a class="nav-link {% if request.path == '/add-product' %}active{% endif %}" href="/add-product">➕ Добавить товар</a>

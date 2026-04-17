@@ -15,6 +15,7 @@ class Client(db.Model):
     name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20), nullable=False)
     address = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     sales = db.relationship("Sale", backref="client", lazy=True)
 
 
@@ -40,7 +41,7 @@ class Sale(db.Model):
 
 @app.route("/")
 def index():
-    return redirect(url_for("add_client"))
+    return redirect(url_for("clients"))
 
 
 @app.route("/add-client", methods=["GET", "POST"])
@@ -66,7 +67,7 @@ def clients():
     return render_template("clients.html", clients=all_clients)
 
 
-@app.route("/client/edit/<int:id>", methods=["GET", "POST"])
+@app.route("/edit-client/<int:id>", methods=["GET", "POST"])
 def edit_client(id):
     client = Client.query.get_or_404(id)
     if request.method == "POST":
@@ -85,7 +86,7 @@ def edit_client(id):
     return render_template("edit_client.html", client=client)
 
 
-@app.route("/client/delete/<int:id>", methods=["POST"])
+@app.route("/delete-client/<int:id>", methods=["POST"])
 def delete_client(id):
     client = Client.query.get_or_404(id)
     db.session.delete(client)

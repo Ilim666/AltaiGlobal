@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Новая продажа - AltaiGlobal{% endblock %}
+
+{% block content %}
+<h1>Новая продажа</h1>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Оформить продажу</h5>
+            </div>
+            <div class="card-body">
+                {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="client_id" class="form-label">Клиент <span class="text-danger">*</span></label>
+                        <select class="form-select" id="client_id" name="client_id" required>
+                            <option value="">— Выберите клиента —</option>
+                            {% for client in clients %}
+                            <option value="{{ client.id }}">{{ client.name }} ({{ client.phone }})</option>
+                            {% endfor %}
+                        </select>
+                        {% if not clients %}
+                        <div class="form-text text-danger">Нет клиентов. <a href="/add-client">Добавьте клиента</a>.</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="product_id" class="form-label">Товар <span class="text-danger">*</span></label>
+                        <select class="form-select" id="product_id" name="product_id" required onchange="updatePrice()">
+                            <option value="">— Выберите товар —</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}" data-price="{{ product.price }}" data-stock="{{ product.quantity }}">
+                                {{ product.name }} — {{ "%.2f"|format(product.price) }} сум (склад: {{ product.quantity }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if not products %}
+                        <div class="form-text text-danger">Нет товаров. <a href="/add-product">Добавьте товар</a>.</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Количество <span class="text-danger">*</span></label>
+                        <input type="number" min="1" class="form-control" id="quantity" name="quantity" value="1" required oninput="updateTotal()">
+                        <div class="form-text" id="stockHint"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Итого</label>
+                        <div class="form-control bg-light fw-bold" id="totalDisplay">0.00 сум</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success">🛒 Оформить продажу</button>
+                    <a href="/sales-list" class="btn btn-secondary ms-2">История</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updatePrice() {
+    updateTotal();
+    const select = document.getElementById('product_id');
+    const option = select.options[select.selectedIndex];
+    const stock = option ? option.dataset.stock : null;
+    document.getElementById('stockHint').textContent = stock !== undefined && stock !== null && option.value
+        ? 'На складе: ' + stock + ' шт.'
+        : '';
+}
+
+function updateTotal() {
+    const select = document.getElementById('product_id');
+    const option = select.options[select.selectedIndex];
+    const price = option ? parseFloat(option.dataset.price) || 0 : 0;
+    const qty = parseInt(document.getElementById('quantity').value) || 0;
+    document.getElementById('totalDisplay').textContent = (price * qty).toFixed(2) + ' сум';
+}
+</script>
+{% endblock %}

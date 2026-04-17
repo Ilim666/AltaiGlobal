@@ -37,6 +37,14 @@
             color: #fff;
             background: #374151;
         }
+        .nav-section-label {
+            color: #9ca3af;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.75rem 0.9rem 0.25rem;
+            display: block;
+        }
         .main-content {
             flex: 1;
             padding: 2rem;
@@ -60,8 +68,23 @@
         <aside class="sidebar">
             <div class="sidebar-title">AltaiGlobal</div>
             <nav class="nav flex-column">
-                <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">Добавление клиента</a>
-                <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">Клиенты</a>
+                <span class="nav-section-label">Клиенты</span>
+                <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">➕ Добавить клиента</a>
+                <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">👥 Список клиентов</a>
+
+                <span class="nav-section-label">Товары</span>
+                <a class="nav-link {% if request.path == '/add-product' %}active{% endif %}" href="/add-product">➕ Добавить товар</a>
+                <a class="nav-link {% if request.path == '/products' %}active{% endif %}" href="/products">📦 Список товаров</a>
+
+                <span class="nav-section-label">Продажи</span>
+                <a class="nav-link {% if request.path == '/sales' %}active{% endif %}" href="/sales">🛒 Новая продажа</a>
+                <a class="nav-link {% if request.path == '/sales-list' %}active{% endif %}" href="/sales-list">📋 История продаж</a>
+
+                <span class="nav-section-label">Отчёты</span>
+                <a class="nav-link {% if request.path == '/reports' %}active{% endif %}" href="/reports">📊 Отчёты</a>
+                <a class="nav-link {% if request.path == '/reports/by-client' %}active{% endif %}" href="/reports/by-client">👤 По клиентам</a>
+                <a class="nav-link {% if request.path == '/reports/by-product' %}active{% endif %}" href="/reports/by-product">📦 По товарам</a>
+                <a class="nav-link {% if request.path == '/reports/by-date' %}active{% endif %}" href="/reports/by-date">📅 По датам</a>
             </nav>
         </aside>
 

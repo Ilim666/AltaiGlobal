@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Отчёты - AltaiGlobal{% endblock %}
+
+{% block content %}
+<h1>Отчёты</h1>
+
+<div class="row g-4 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h6 class="card-title">Продаж всего</h6>
+                <h2 class="mb-0">{{ total_sales }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h6 class="card-title">Общая выручка</h6>
+                <h2 class="mb-0">{{ "%.2f"|format(total_revenue) }} сум</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h6 class="card-title">Клиентов</h6>
+                <h2 class="mb-0">{{ total_clients }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h6 class="card-title">Товаров</h6>
+                <h2 class="mb-0">{{ total_products }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <a href="/reports/by-client" class="card text-decoration-none h-100 border-primary">
+            <div class="card-body text-center py-4">
+                <div style="font-size:3rem">👤</div>
+                <h5 class="mt-2">Отчёт по клиентам</h5>
+                <p class="text-muted small mb-0">Кто сколько потратил</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="/reports/by-product" class="card text-decoration-none h-100 border-success">
+            <div class="card-body text-center py-4">
+                <div style="font-size:3rem">📦</div>
+                <h5 class="mt-2">Отчёт по товарам</h5>
+                <p class="text-muted small mb-0">Сколько продано каждого</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="/reports/by-date" class="card text-decoration-none h-100 border-info">
+            <div class="card-body text-center py-4">
+                <div style="font-size:3rem">📅</div>
+                <h5 class="mt-2">Отчёт по датам</h5>
+                <p class="text-muted small mb-0">Продажи по дням</p>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

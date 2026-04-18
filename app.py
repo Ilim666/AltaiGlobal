@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, redirect, render_template, request, url_for
@@ -410,6 +411,79 @@ def sales_journal():
         )
     all_sales = query.order_by(Sale.created_at.desc()).all()
     return render_template("sales_journal.html", sales=all_sales, q=q)
+
+
+@app.route("/debts-journal")
+def debts_journal():
+    q = request.args.get("q", "").strip()
+    client_id = request.args.get("client_id", "").strip()
+    query = (
+        Sale.query
+        .options(joinedload(Sale.car).joinedload(Car.client))
+        .join(Sale.car)
+        .join(Car.client)
+        .filter(Sale.payment_method == "долг")
+    )
+    if q:
+        query = query.filter(
+            db.or_(
+                Client.fio.ilike(f"%{q}%"),
+                Car.number.ilike(f"%{q}%"),
+            )
+        )
+    if client_id:
+        try:
+            query = query.filter(Client.id == int(client_id))
+        except ValueError:
+            pass
+    all_debts = query.order_by(Sale.created_at.desc()).all()
+    return render_template("debts_journal.html", sales=all_debts, q=q, client_id=client_id)
+
+
+@app.route("/debts-by-client")
+def debts_by_client():
+    q = request.args.get("q", "").strip()
+    debt_sales = (
+        Sale.query
+        .options(joinedload(Sale.car).joinedload(Car.client))
+        .join(Sale.car)
+        .join(Car.client)
+        .filter(Sale.payment_method == "долг")
+        .all()
+    )
+
+    clients_map = {}
+    for sale in debt_sales:
+        client = sale.car.client
+        if client.id not in clients_map:
+            clients_map[client.id] = {
+                "client": client,
+                "count": 0,
+                "total_debt": 0.0,
+                "total_paid": 0.0,
+            }
+        clients_map[client.id]["count"] += 1
+        clients_map[client.id]["total_debt"] += sale.total
+        clients_map[client.id]["total_paid"] += sale.payment_amount or 0.0
+
+    rows = []
+    for data in clients_map.values():
+        data["remaining"] = data["total_debt"] - data["total_paid"]
+        rows.append(data)
+
+    if q:
+        rows = [r for r in rows if q.lower() in r["client"].fio.lower()]
+
+    rows.sort(key=lambda x: x["remaining"], reverse=True)
+
+    totals = {
+        "count": sum(r["count"] for r in rows),
+        "total_debt": sum(r["total_debt"] for r in rows),
+        "total_paid": sum(r["total_paid"] for r in rows),
+        "remaining": sum(r["remaining"] for r in rows),
+    }
+
+    return render_template("debts_by_client.html", rows=rows, totals=totals, q=q)
 
 
 if __name__ == "__main__":

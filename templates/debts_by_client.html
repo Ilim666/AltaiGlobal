@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Долги по клиентам — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">💰 Долги по клиентам</h2>
+    <a href="/debts-journal" class="btn btn-outline-secondary">📋 Журнал долгов</a>
+</div>
+
+<form method="get" action="/debts-by-client" class="mb-4">
+    <div class="input-group">
+        <input type="text" name="q" class="form-control"
+               placeholder="Поиск по клиенту…"
+               value="{{ q or '' }}">
+        <button class="btn btn-outline-secondary" type="submit">🔍 Найти</button>
+        {% if q %}
+        <a href="/debts-by-client" class="btn btn-outline-danger">✕ Сбросить</a>
+        {% endif %}
+    </div>
+</form>
+
+{% if rows %}
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Клиент</th>
+                    <th>Телефон</th>
+                    <th>Кол-во долгов</th>
+                    <th>Общий долг</th>
+                    <th>Всего оплачено</th>
+                    <th>Остаток</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>
+                    <a href="/debts-journal?client_id={{ r.client.id }}" class="text-decoration-none">
+                        {{ r.client.fio }}
+                    </a>
+                </td>
+                <td>{{ r.client.phone | fmt_phone }}</td>
+                <td>{{ r.count }}</td>
+                <td><strong>{{ "%.2f"|format(r.total_debt) }}</strong></td>
+                <td>{{ "%.2f"|format(r.total_paid) }}</td>
+                <td><strong class="text-danger">{{ "%.2f"|format(r.remaining) }}</strong></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+            <tfoot class="table-secondary fw-bold">
+                <tr>
+                    <td>ИТОГО</td>
+                    <td>—</td>
+                    <td>{{ totals.count }}</td>
+                    <td>{{ "%.2f"|format(totals.total_debt) }}</td>
+                    <td>{{ "%.2f"|format(totals.total_paid) }}</td>
+                    <td class="text-danger">{{ "%.2f"|format(totals.remaining) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    {% if q %}
+    По запросу «{{ q }}» клиентов с долгами не найдено. <a href="/debts-by-client">Показать все</a>.
+    {% else %}
+    Долгов пока нет.
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

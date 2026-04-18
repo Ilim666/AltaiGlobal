@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Журнал долгов — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">📋 Журнал долгов</h2>
+    <a href="/debts-by-client" class="btn btn-outline-secondary">💰 Долги по клиентам</a>
+</div>
+
+<form method="get" action="/debts-journal" class="mb-4">
+    <div class="input-group">
+        <input type="text" name="q" class="form-control"
+               placeholder="Поиск по клиенту или номеру машины…"
+               value="{{ q or '' }}">
+        <button class="btn btn-outline-secondary" type="submit">🔍 Найти</button>
+        {% if q or client_id %}
+        <a href="/debts-journal" class="btn btn-outline-danger">✕ Сбросить</a>
+        {% endif %}
+    </div>
+    {% if client_id %}<input type="hidden" name="client_id" value="{{ client_id }}">{% endif %}
+</form>
+
+{% if client_id and sales %}
+<div class="alert alert-warning py-2 mb-3">
+    Показаны долги клиента: <strong>{{ sales[0].car.client.fio }}</strong>
+    <a href="/debts-journal" class="ms-2 btn btn-sm btn-outline-secondary">Показать все</a>
+</div>
+{% endif %}
+
+{% if sales %}
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Дата</th>
+                    <th>Клиент</th>
+                    <th>Номер машины</th>
+                    <th>Сумма долга</th>
+                    <th>Оплачено</th>
+                    <th>Остаток</th>
+                    <th>Статус</th>
+                    <th>Примечание</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for s in sales %}
+            {% set paid = s.payment_amount or 0 %}
+            {% set remaining = s.total - paid %}
+            <tr>
+                <td>{{ s.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>
+                    <a href="/client/{{ s.car.client.id }}" class="text-decoration-none">
+                        {{ s.car.client.fio }}
+                    </a>
+                </td>
+                <td><strong>{{ s.car.number }}</strong></td>
+                <td><strong>{{ "%.2f"|format(s.total) }}</strong></td>
+                <td>{{ "%.2f"|format(paid) }}</td>
+                <td><strong>{{ "%.2f"|format(remaining) }}</strong></td>
+                <td>
+                    {% if remaining <= 0 %}
+                        <span class="badge bg-success">Погашено</span>
+                    {% else %}
+                        <span class="badge bg-danger">Долг активен</span>
+                    {% endif %}
+                </td>
+                <td>{{ s.note or '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    {% if q %}
+    По запросу «{{ q }}» долгов не найдено. <a href="/debts-journal">Показать все</a>.
+    {% elif client_id %}
+    У этого клиента нет долгов. <a href="/debts-journal">Показать все</a>.
+    {% else %}
+    Долгов пока нет.
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

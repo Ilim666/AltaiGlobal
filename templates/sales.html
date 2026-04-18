@@ -70,9 +70,8 @@
                         <label class="form-label fw-semibold">Способ оплаты <span class="text-danger">*</span></label>
                         <select class="form-select {% if errors.payment_method %}is-invalid{% endif %}"
                                 name="payment_method" id="payment_method_select">
-                            <option value="">— Выберите —</option>
                             {% for m in payment_methods %}
-                            <option value="{{ m }}" {% if form.payment_method == m %}selected{% endif %}>
+                            <option value="{{ m }}" {% if (form.payment_method or 'долг') == m %}selected{% endif %}>
                                 {{ m|capitalize }}
                             </option>
                             {% endfor %}
@@ -82,7 +81,7 @@
 
                     <!-- Payment amount (hidden for "долг") -->
                     <div class="mb-3" id="payment_amount_block"
-                         {% if form.payment_method == 'долг' %}style="display:none"{% endif %}>
+                         {% if not form.payment_method or form.payment_method == 'долг' %}style="display:none"{% endif %}>
                         <label class="form-label fw-semibold">Сумма оплаты <span class="text-danger">*</span></label>
                         <input type="number" step="0.01" min="0"
                                class="form-control {% if errors.payment_amount %}is-invalid{% endif %}"
@@ -138,6 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
     paymentSelect.addEventListener('change', function () {
         if (this.value === 'долг') {
             paymentAmountBlock.style.display = 'none';
+            document.getElementById('payment_amount_input').value = '';
         } else {
             paymentAmountBlock.style.display = '';
         }

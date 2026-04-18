@@ -422,7 +422,7 @@ def debts_journal():
         .options(joinedload(Sale.car).joinedload(Car.client))
         .join(Sale.car)
         .join(Car.client)
-        .filter(Sale.payment_method == "долг")
+        .filter((Sale.total - db.func.coalesce(Sale.payment_amount, 0.0)) > 0)
     )
     if q:
         query = query.filter(
@@ -448,7 +448,7 @@ def debts_by_client():
         .options(joinedload(Sale.car).joinedload(Car.client))
         .join(Sale.car)
         .join(Car.client)
-        .filter(Sale.payment_method == "долг")
+        .filter((Sale.total - db.func.coalesce(Sale.payment_amount, 0.0)) > 0)
         .all()
     )
 

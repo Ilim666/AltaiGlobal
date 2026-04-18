@@ -74,6 +74,7 @@ class Payment(db.Model):
         db.CheckConstraint("payment_type IN ('продажа', 'долг')"),
         nullable=False,
     )
+    payment_method = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     client = db.relationship("Client", backref=db.backref("payments", lazy=True))
 
@@ -524,6 +525,10 @@ def pay_debt(sale_id):
     except (ValueError, TypeError):
         return redirect(url_for("debts_journal"))
 
+    payment_method = request.form.get("payment_method", "").strip()
+    if payment_method not in ["наличка", "безнал", "доллар"]:
+        return redirect(url_for("debts_journal"))
+
     remaining = sale.total - (sale.payment_amount or 0.0)
     if amount > remaining:
         amount = remaining
@@ -535,6 +540,7 @@ def pay_debt(sale_id):
         sale_id=sale.id,
         amount=amount,
         payment_type="долг",
+        payment_method=payment_method,
     )
     db.session.add(payment)
     db.session.commit()

@@ -54,7 +54,7 @@
                     <strong>{{ "%.2f"|format(p.amount) }}</strong>
                 </td>
                 <td>
-                    {% set payment_method = p.sale.payment_method if p.sale else none %}
+                    {% set payment_method = p.payment_method if p.payment_method else (p.sale.payment_method if p.sale else none) %}
                     {% if payment_method == 'наличка' %}
                         <span class="badge bg-success">Наличка</span>
                     {% elif payment_method == 'безнал' %}

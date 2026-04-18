@@ -108,6 +108,15 @@
                     <p class="mb-1">Клиент: <strong id="modalClient"></strong></p>
                     <p class="mb-3">Остаток: <strong id="modalRemaining"></strong></p>
                     <div class="mb-3">
+                        <label for="payMethod" class="form-label">Способ оплаты</label>
+                        <select name="payment_method" id="payMethod" class="form-select" required>
+                            <option value="" disabled selected>Выберите способ...</option>
+                            <option value="наличка">Наличка</option>
+                            <option value="безнал">Безнал</option>
+                            <option value="доллар">Доллар</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label for="payAmount" class="form-label">Сумма оплаты</label>
                         <input type="number" step="0.01" min="0.01" name="amount"
                                id="payAmount" class="form-control" required>
@@ -135,6 +144,7 @@ document.getElementById('payModal').addEventListener('show.bs.modal', function (
     var amountInput = document.getElementById('payAmount');
     amountInput.value = remaining;
     amountInput.max = remaining;
+    document.getElementById('payMethod').value = '';
     document.getElementById('payForm').action = '/pay-debt/' + saleId;
 });
 

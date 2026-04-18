@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Добавить машину — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">🚙 Добавить машину</h2>
+    <a href="/clients" class="btn btn-outline-secondary">← К клиентам</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Данные машины</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Клиент <span class="text-danger">*</span></label>
+                        <select class="form-select {% if errors.client_id %}is-invalid{% endif %}" name="client_id">
+                            <option value="">— Выберите клиента —</option>
+                            {% for c in clients %}
+                            <option value="{{ c.id }}"
+                                {% if form.client_id == c.id|string or request.args.get('client_id') == c.id|string %}selected{% endif %}>
+                                {{ c.fio }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if errors.client_id %}<div class="invalid-feedback">{{ errors.client_id }}</div>{% endif %}
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Номер машины <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control {% if errors.number %}is-invalid{% endif %}"
+                                   name="number" value="{{ form.number or '' }}" placeholder="А123БВ">
+                            {% if errors.number %}<div class="invalid-feedback">{{ errors.number }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Марка <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control {% if errors.brand %}is-invalid{% endif %}"
+                                   name="brand" value="{{ form.brand or '' }}" placeholder="Toyota Camry">
+                            {% if errors.brand %}<div class="invalid-feedback">{{ errors.brand }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Цвет <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control {% if errors.color %}is-invalid{% endif %}"
+                                   name="color" value="{{ form.color or '' }}" placeholder="Белый">
+                            {% if errors.color %}<div class="invalid-feedback">{{ errors.color }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Примечание</label>
+                            <input type="text" class="form-control" name="note"
+                                   value="{{ form.note or '' }}" placeholder="Опционально">
+                        </div>
+                    </div>
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-success px-4">💾 Сохранить</button>
+                        <a href="/clients" class="btn btn-outline-secondary">Отмена</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

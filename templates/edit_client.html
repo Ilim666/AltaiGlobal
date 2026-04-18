@@ -1,32 +1,59 @@
 {% extends "base.html" %}
-
-{% block title %}Редактирование клиента - AltaiGlobal{% endblock %}
-
+{% block title %}Редактировать клиента — AltaiGlobal{% endblock %}
 {% block content %}
-<h1>Редактирование клиента</h1>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">✏️ Редактировать клиента</h2>
+    <a href="/client/{{ client.id }}" class="btn btn-outline-secondary">← Назад</a>
+</div>
 
 <div class="row">
-    <div class="col-md-6">
-        <div class="card">
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Данные клиента</h5>
+            </div>
             <div class="card-body">
-                <form method="POST">
+                <form method="post" novalidate>
                     <div class="mb-3">
-                        <label for="name" class="form-label">Имя</label>
-                        <input type="text" class="form-control" id="name" name="name" value="{{ client.name }}" required>
+                        <label class="form-label fw-semibold">ФИО <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control {% if errors.fio %}is-invalid{% endif %}"
+                               name="fio" value="{{ form.fio }}">
+                        {% if errors.fio %}<div class="invalid-feedback">{{ errors.fio }}</div>{% endif %}
                     </div>
                     <div class="mb-3">
-                        <label for="phone" class="form-label">Телефон</label>
-                        <input type="text" class="form-control" id="phone" name="phone" value="{{ client.phone }}" required>
+                        <label class="form-label fw-semibold">Телефон (10 цифр) <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control {% if errors.phone %}is-invalid{% endif %}"
+                               name="phone" id="phone" value="{{ form.phone }}" maxlength="13">
+                        {% if errors.phone %}
+                            <div class="invalid-feedback">{{ errors.phone }}</div>
+                        {% else %}
+                            <div class="form-text">Формат: 1234-567-890</div>
+                        {% endif %}
                     </div>
                     <div class="mb-3">
-                        <label for="address" class="form-label">Адрес</label>
-                        <input type="text" class="form-control" id="address" name="address" value="{{ client.address }}" required>
+                        <label class="form-label fw-semibold">ИНН (14 цифр) <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control {% if errors.inn %}is-invalid{% endif %}"
+                               name="inn" id="inn" value="{{ form.inn }}" maxlength="14">
+                        {% if errors.inn %}<div class="invalid-feedback">{{ errors.inn }}</div>{% endif %}
                     </div>
-                    <button type="submit" class="btn btn-success">Сохранить</button>
-                    <a href="/clients" class="btn btn-secondary">Отмена</a>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-warning">💾 Сохранить</button>
+                        <a href="/client/{{ client.id }}" class="btn btn-outline-secondary">Отмена</a>
+                    </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+const phoneInput = document.getElementById('phone');
+phoneInput.addEventListener('input', function () {
+    this.value = this.value.replace(/\D/g, '').slice(0, 10);
+});
+const innInput = document.getElementById('inn');
+innInput.addEventListener('input', function () {
+    this.value = this.value.replace(/\D/g, '').slice(0, 14);
+});
+</script>
 {% endblock %}

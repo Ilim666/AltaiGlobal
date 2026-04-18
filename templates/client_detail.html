@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ client.fio }} — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">👤 {{ client.fio }}</h2>
+    <a href="/clients" class="btn btn-outline-secondary">← К списку</a>
+</div>
+
+<!-- Client info -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+        <span>Данные клиента</span>
+        <a href="/edit-client/{{ client.id }}" class="btn btn-sm btn-light">✏️ Редактировать</a>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <p class="mb-1 text-muted small">ФИО</p>
+                <p class="fw-semibold">{{ client.fio }}</p>
+            </div>
+            <div class="col-md-4">
+                <p class="mb-1 text-muted small">Телефон</p>
+                <p class="fw-semibold">{{ client.phone[:4] }}-{{ client.phone[4:7] }}-{{ client.phone[7:] }}</p>
+            </div>
+            <div class="col-md-4">
+                <p class="mb-1 text-muted small">ИНН</p>
+                <p class="fw-semibold">{{ client.inn }}</p>
+            </div>
+        </div>
+        <div class="text-end mt-2">
+            <form method="post" action="/delete-client/{{ client.id }}" class="d-inline"
+                  onsubmit="return confirm('Удалить клиента и все его машины?')">
+                <button class="btn btn-sm btn-outline-danger">🗑 Удалить клиента</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Cars -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">🚗 Машины ({{ cars|length }})</h4>
+    <a href="/add-car?client_id={{ client.id }}" class="btn btn-success btn-sm">➕ Добавить машину</a>
+</div>
+
+{% if cars %}
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Номер</th>
+                    <th>Марка</th>
+                    <th>Цвет</th>
+                    <th>Примечание</th>
+                    <th>Дата</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for car in cars %}
+            <tr>
+                <td><strong>{{ car.number }}</strong></td>
+                <td>{{ car.brand }}</td>
+                <td>{{ car.color }}</td>
+                <td>{{ car.note or '—' }}</td>
+                <td>{{ car.created_at.strftime('%d.%m.%Y') }}</td>
+                <td>
+                    <a href="/edit-car/{{ car.id }}" class="btn btn-sm btn-outline-warning">✏️</a>
+                    <form method="post" action="/delete-car/{{ car.id }}" class="d-inline"
+                          onsubmit="return confirm('Удалить машину {{ car.number }}?')">
+                        <button class="btn btn-sm btn-outline-danger">🗑</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-secondary">
+    У этого клиента пока нет машин. <a href="/add-car?client_id={{ client.id }}">Добавить машину</a>.
+</div>
+{% endif %}
+{% endblock %}

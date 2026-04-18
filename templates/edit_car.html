@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Редактировать машину — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">✏️ Редактировать машину</h2>
+    <a href="/client/{{ car.client_id }}" class="btn btn-outline-secondary">← Назад</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Данные машины: {{ car.number }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Номер машины <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control {% if errors.number %}is-invalid{% endif %}"
+                                   name="number" value="{{ form.number }}">
+                            {% if errors.number %}<div class="invalid-feedback">{{ errors.number }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Марка <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control {% if errors.brand %}is-invalid{% endif %}"
+                                   name="brand" value="{{ form.brand }}">
+                            {% if errors.brand %}<div class="invalid-feedback">{{ errors.brand }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Цвет <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control {% if errors.color %}is-invalid{% endif %}"
+                                   name="color" value="{{ form.color }}">
+                            {% if errors.color %}<div class="invalid-feedback">{{ errors.color }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Примечание</label>
+                            <input type="text" class="form-control" name="note" value="{{ form.note }}">
+                        </div>
+                    </div>
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-warning px-4">💾 Сохранить</button>
+                        <a href="/client/{{ car.client_id }}" class="btn btn-outline-secondary">Отмена</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

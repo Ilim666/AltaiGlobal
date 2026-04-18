@@ -1,46 +1,50 @@
 {% extends "base.html" %}
-
-{% block title %}Клиенты - AltaiGlobal{% endblock %}
-
+{% block title %}Список клиентов — AltaiGlobal{% endblock %}
 {% block content %}
-<h1>Клиенты</h1>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">👥 Клиенты</h2>
+    <a href="/add-client" class="btn btn-primary">➕ Добавить клиента</a>
+</div>
 
-<div class="card">
-    <div class="card-header">
-        <h5 class="mb-0">Список клиентов ({{ clients|length }})</h5>
-    </div>
-    <div class="card-body">
-        {% if clients %}
-        <table class="table table-striped">
-            <thead>
+{% if clients %}
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
                 <tr>
-                    <th>ID</th>
-                    <th>Имя</th>
+                    <th>#</th>
+                    <th>ФИО</th>
                     <th>Телефон</th>
-                    <th>Адрес</th>
+                    <th>ИНН</th>
+                    <th>Машин</th>
+                    <th>Дата</th>
                     <th>Действия</th>
                 </tr>
             </thead>
             <tbody>
-                {% for client in clients %}
-                <tr>
-                    <td>{{ client.id }}</td>
-                    <td>{{ client.name }}</td>
-                    <td>{{ client.phone }}</td>
-                    <td>{{ client.address }}</td>
-                    <td>
-                        <a href="/client/edit/{{ client.id }}" class="btn btn-sm btn-warning">Редактировать</a>
-                        <form method="POST" action="/client/delete/{{ client.id }}" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Вы уверены?')">Удалить</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
+            {% for c in clients %}
+            <tr style="cursor:pointer" onclick="location.href='/client/{{ c.id }}'">
+                <td>{{ c.id }}</td>
+                <td><strong>{{ c.fio }}</strong></td>
+                <td>{{ c.phone[:4] }}-{{ c.phone[4:7] }}-{{ c.phone[7:] }}</td>
+                <td>{{ c.inn }}</td>
+                <td><span class="badge bg-secondary">{{ c.cars|length }}</span></td>
+                <td>{{ c.created_at.strftime('%d.%m.%Y') }}</td>
+                <td onclick="event.stopPropagation()">
+                    <a href="/client/{{ c.id }}" class="btn btn-sm btn-outline-info" title="Детали">👁</a>
+                    <a href="/edit-client/{{ c.id }}" class="btn btn-sm btn-outline-warning" title="Редактировать">✏️</a>
+                    <form method="post" action="/delete-client/{{ c.id }}" class="d-inline"
+                          onsubmit="return confirm('Удалить клиента и все его машины?')">
+                        <button class="btn btn-sm btn-outline-danger" title="Удалить">🗑</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <p class="alert alert-warning">Клиентов нет. Добавьте первого клиента!</p>
-        {% endif %}
     </div>
 </div>
+{% else %}
+<div class="alert alert-info">Клиентов пока нет. <a href="/add-client">Добавить первого</a>.</div>
+{% endif %}
 {% endblock %}

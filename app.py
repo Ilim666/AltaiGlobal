@@ -564,7 +564,7 @@ def payments():
 
 @app.route("/cash")
 def cash():
-    all_payments = Payment.query.order_by(Payment.created_at.desc()).all()
+    all_payments = Payment.query.options(joinedload(Payment.sale)).order_by(Payment.created_at.desc()).all()
 
     daily = {}
     for p in all_payments:

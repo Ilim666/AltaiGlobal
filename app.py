@@ -1,7 +1,7 @@
 import re
 from datetime import datetime, timezone
 
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import joinedload
 
@@ -39,6 +39,22 @@ class Car(db.Model):
     number = db.Column(db.String(20), unique=True, nullable=False)
     brand = db.Column(db.String(100), nullable=False)
     color = db.Column(db.String(50), nullable=False)
+    note = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    sales = db.relationship("Sale", backref="car", lazy=True, cascade="all, delete-orphan")
+
+
+PAYMENT_METHODS = ["наличка", "безнал", "доллар", "долг"]
+
+
+class Sale(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    car_id = db.Column(db.Integer, db.ForeignKey("car.id"), nullable=False)
+    liters = db.Column(db.Float, nullable=False)
+    price_per_liter = db.Column(db.Float, nullable=False)
+    total = db.Column(db.Float, nullable=False)
+    payment_method = db.Column(db.String(20), nullable=False)
+    payment_amount = db.Column(db.Float, nullable=True)
     note = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -278,6 +294,122 @@ def delete_car(id):
     if next_page == "cars":
         return redirect(url_for("cars"))
     return redirect(url_for("client_detail", id=client_id))
+
+
+# ── Sales ─────────────────────────────────────────────────────────────────────
+
+@app.route("/api/car-search")
+def api_car_search():
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify([])
+    cars = (
+        Car.query.options(joinedload(Car.client))
+        .filter(Car.number.ilike(f"%{q}%"))
+        .limit(10)
+        .all()
+    )
+    return jsonify([
+        {"id": c.id, "number": c.number, "fio": c.client.fio}
+        for c in cars
+    ])
+
+
+@app.route("/sales", methods=["GET", "POST"])
+def sales():
+    errors = {}
+    form = {}
+    client_info = None
+    if request.method == "POST":
+        form["car_number"] = request.form.get("car_number", "").strip()
+        form["liters"] = request.form.get("liters", "").strip()
+        form["price_per_liter"] = request.form.get("price_per_liter", "").strip()
+        form["payment_method"] = request.form.get("payment_method", "").strip()
+        form["payment_amount"] = request.form.get("payment_amount", "").strip()
+        form["note"] = request.form.get("note", "").strip()
+
+        car = Car.query.filter_by(number=form["car_number"]).first() if form["car_number"] else None
+        if not form["car_number"]:
+            errors["car_number"] = "Введите номер машины."
+        elif not car:
+            errors["car_number"] = "Машина с таким номером не найдена."
+
+        try:
+            liters = float(form["liters"])
+            if liters <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            errors["liters"] = "Введите корректное количество литров."
+            liters = None
+
+        try:
+            price = float(form["price_per_liter"])
+            if price <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            errors["price_per_liter"] = "Введите корректную цену за литр."
+            price = None
+
+        if form["payment_method"] not in PAYMENT_METHODS:
+            errors["payment_method"] = "Выберите способ оплаты."
+
+        payment_amount = None
+        if form["payment_method"] != "долг":
+            if not form["payment_amount"]:
+                errors["payment_amount"] = "Введите сумму оплаты."
+            else:
+                try:
+                    payment_amount = float(form["payment_amount"])
+                    if payment_amount < 0:
+                        raise ValueError
+                except (ValueError, TypeError):
+                    errors["payment_amount"] = "Введите корректную сумму оплаты."
+
+        if not errors:
+            total = round(liters * price, 2)
+            sale = Sale(
+                car_id=car.id,
+                liters=liters,
+                price_per_liter=price,
+                total=total,
+                payment_method=form["payment_method"],
+                payment_amount=payment_amount,
+                note=form["note"] or None,
+            )
+            db.session.add(sale)
+            db.session.commit()
+            return redirect(url_for("sales_journal"))
+
+        if car:
+            client_info = {"fio": car.client.fio}
+
+    return render_template(
+        "sales.html",
+        errors=errors,
+        form=form,
+        client_info=client_info,
+        payment_methods=PAYMENT_METHODS,
+    )
+
+
+@app.route("/sales-journal")
+def sales_journal():
+    q = request.args.get("q", "").strip()
+    query = (
+        Sale.query
+        .options(joinedload(Sale.car).joinedload(Car.client))
+        .join(Sale.car)
+        .join(Car.client)
+    )
+    if q:
+        query = query.filter(
+            db.or_(
+                Client.fio.ilike(f"%{q}%"),
+                Car.number.ilike(f"%{q}%"),
+            )
+        )
+    all_sales = query.order_by(Sale.created_at.desc()).all()
+    return render_template("sales_journal.html", sales=all_sales, q=q)
 
 
 if __name__ == "__main__":

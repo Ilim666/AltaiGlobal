@@ -404,6 +404,7 @@ def sales():
                     sale_id=sale.id,
                     amount=payment_amount,
                     payment_type="продажа",
+                    payment_method=form["payment_method"],
                 )
                 db.session.add(payment)
             db.session.commit()
@@ -567,7 +568,10 @@ def cash():
 
     daily = {}
     for p in all_payments:
-        date_key = p.created_at.strftime("%d.%m.%Y")
+        if p.payment_type == "продажа" and p.sale_id and p.sale:
+            date_key = p.sale.created_at.strftime("%d.%m.%Y")
+        else:
+            date_key = p.created_at.strftime("%d.%m.%Y")
         if date_key not in daily:
             daily[date_key] = {
                 "date": date_key,

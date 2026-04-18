@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from flask import Flask, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import joinedload
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
@@ -257,12 +258,21 @@ def edit_car(id):
     return render_template("edit_car.html", car=car, errors=errors, form=form)
 
 
+@app.route("/cars")
+def cars():
+    all_cars = Car.query.options(joinedload(Car.client)).order_by(Car.id.desc()).all()
+    return render_template("cars.html", cars=all_cars)
+
+
 @app.route("/delete-car/<int:id>", methods=["POST"])
 def delete_car(id):
     car = Car.query.get_or_404(id)
     client_id = car.client_id
+    next_page = request.form.get("next", "")
     db.session.delete(car)
     db.session.commit()
+    if next_page == "cars":
+        return redirect(url_for("cars"))
     return redirect(url_for("client_detail", id=client_id))
 
 

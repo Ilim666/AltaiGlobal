@@ -582,7 +582,7 @@ def cash():
         if p.payment_type == "продажа" and method in ("наличка", "безнал", "доллар"):
             daily[date_key][f"sale_{method}"] += p.amount
         elif p.payment_type == "долг" and method in ("наличка", "безнал", "доллар"):
-            if p.sale and p.sale.created_at.date() == p.created_at.date():
+            if p.sale and p.sale.created_at and p.sale.created_at.date() == p.created_at.date():
                 daily[date_key][f"sale_{method}"] += p.amount
             else:
                 daily[date_key][f"debt_{method}"] += p.amount

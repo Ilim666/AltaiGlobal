@@ -52,17 +52,17 @@
                 </td>
                 <td><strong>{{ "%.2f"|format(p.amount) }}</strong></td>
                 <td>
-                    {% set method = p.sale.payment_method if p.sale else none %}
-                    {% if method == 'наличка' %}
+                    {% set payment_method = p.sale.payment_method if p.sale else none %}
+                    {% if payment_method == 'наличка' %}
                         <span class="badge bg-success">Наличка</span>
-                    {% elif method == 'безнал' %}
+                    {% elif payment_method == 'безнал' %}
                         <span class="badge bg-primary">Безнал</span>
-                    {% elif method == 'доллар' %}
+                    {% elif payment_method == 'доллар' %}
                         <span class="badge bg-warning text-dark">Доллар</span>
-                    {% elif method == 'долг' %}
+                    {% elif payment_method == 'долг' %}
                         <span class="badge bg-danger">Долг</span>
-                    {% elif method %}
-                        <span class="badge bg-secondary">{{ method }}</span>
+                    {% elif payment_method %}
+                        <span class="badge bg-secondary">{{ payment_method }}</span>
                     {% else %}
                         —
                     {% endif %}

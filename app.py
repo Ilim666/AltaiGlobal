@@ -260,8 +260,12 @@ def edit_car(id):
 
 @app.route("/cars")
 def cars():
-    all_cars = Car.query.options(joinedload(Car.client)).order_by(Car.id.desc()).all()
-    return render_template("cars.html", cars=all_cars)
+    q = request.args.get("q", "").strip()
+    query = Car.query.options(joinedload(Car.client)).join(Car.client)
+    if q:
+        query = query.filter(Client.fio.ilike(f"%{q}%"))
+    all_cars = query.order_by(Car.id.desc()).all()
+    return render_template("cars.html", cars=all_cars, q=q)
 
 
 @app.route("/delete-car/<int:id>", methods=["POST"])

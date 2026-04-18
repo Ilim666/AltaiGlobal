@@ -404,6 +404,7 @@ def sales():
                     sale_id=sale.id,
                     amount=payment_amount,
                     payment_type="продажа",
+                    payment_method=form["payment_method"],
                 )
                 db.session.add(payment)
             db.session.commit()

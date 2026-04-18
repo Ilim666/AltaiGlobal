@@ -1,34 +1,215 @@
 {% extends "base.html" %}
-
-{% block title %}Добавление клиента - AltaiGlobal{% endblock %}
+{% block title %}Добавить клиента — AltaiGlobal{% endblock %}
 
 {% block content %}
-<h1>Добавление клиента</h1>
+<div class="page-header">
+    <h4 class="mb-0"><i class="bi bi-person-plus me-2"></i>Новый клиент + автомобиль</h4>
+    <a href="/clients" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>К списку
+    </a>
+</div>
 
-<div class="row">
-    <div class="col-lg-7 col-xl-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Добавить нового клиента</h5>
+<form method="post" id="addClientForm" novalidate>
+    <div class="row g-4">
+        <!-- Client card -->
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-person me-2"></i>Данные клиента
+                </div>
+                <div class="card-body">
+                    <!-- FIO -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">ФИО <span class="text-danger">*</span></label>
+                        <input type="text" name="fio" id="fio" class="form-control {% if errors.fio %}is-invalid{% endif %}"
+                               value="{{ form.fio or '' }}" placeholder="Иванов Иван Иванович" maxlength="100" required>
+                        {% if errors.fio %}
+                        <div class="invalid-feedback">{{ errors.fio }}</div>
+                        {% else %}
+                        <div class="invalid-feedback">Введите ФИО</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Phone -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Телефон <span class="text-danger">*</span></label>
+                        <input type="text" name="phone" id="phone" class="form-control {% if errors.phone %}is-invalid{% endif %}"
+                               value="{{ form.phone or '' }}" placeholder="XXXX-XXX-XXX" maxlength="12" required>
+                        {% if errors.phone %}
+                        <div class="invalid-feedback">{{ errors.phone }}</div>
+                        {% else %}
+                        <div class="invalid-feedback">Введите ровно 10 цифр (формат 4-3-3)</div>
+                        {% endif %}
+                        <div class="form-text">Формат: 0555-123-456 (10 цифр)</div>
+                    </div>
+
+                    <!-- INN -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">ИНН <span class="text-danger">*</span></label>
+                        <input type="text" name="inn" id="inn" class="form-control {% if errors.inn %}is-invalid{% endif %}"
+                               value="{{ form.inn or '' }}" placeholder="12345678901234" maxlength="14" required>
+                        {% if errors.inn %}
+                        <div class="invalid-feedback">{{ errors.inn }}</div>
+                        {% else %}
+                        <div class="invalid-feedback">ИНН должен содержать ровно 14 цифр</div>
+                        {% endif %}
+                        <div class="form-text">14 цифр</div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="POST">
+        </div>
+
+        <!-- Car card -->
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-car-front me-2"></i>Данные автомобиля
+                </div>
+                <div class="card-body">
+                    <!-- Car number -->
                     <div class="mb-3">
-                        <label for="name" class="form-label">Имя</label>
-                        <input type="text" class="form-control" id="name" name="name" required>
+                        <label class="form-label fw-semibold">Номер машины <span class="text-danger">*</span></label>
+                        <input type="text" name="car_number" id="car_number" class="form-control {% if errors.car_number %}is-invalid{% endif %}"
+                               value="{{ form.car_number or '' }}" placeholder="А123БВ" maxlength="20" required>
+                        {% if errors.car_number %}
+                        <div class="invalid-feedback">{{ errors.car_number }}</div>
+                        {% else %}
+                        <div class="invalid-feedback">Введите номер машины</div>
+                        {% endif %}
                     </div>
+
+                    <!-- Brand -->
                     <div class="mb-3">
-                        <label for="phone" class="form-label">Телефон</label>
-                        <input type="text" class="form-control" id="phone" name="phone" required>
+                        <label class="form-label fw-semibold">Марка машины <span class="text-danger">*</span></label>
+                        <input type="text" name="car_brand" id="car_brand" class="form-control {% if errors.car_brand %}is-invalid{% endif %}"
+                               value="{{ form.car_brand or '' }}" placeholder="Toyota, BMW, Lada..." maxlength="100" required>
+                        {% if errors.car_brand %}
+                        <div class="invalid-feedback">{{ errors.car_brand }}</div>
+                        {% else %}
+                        <div class="invalid-feedback">Введите марку машины</div>
+                        {% endif %}
                     </div>
+
+                    <!-- Color -->
                     <div class="mb-3">
-                        <label for="address" class="form-label">Адрес</label>
-                        <input type="text" class="form-control" id="address" name="address" required>
+                        <label class="form-label fw-semibold">Цвет <span class="text-danger">*</span></label>
+                        <input type="text" name="car_color" id="car_color" class="form-control {% if errors.car_color %}is-invalid{% endif %}"
+                               value="{{ form.car_color or '' }}" placeholder="Белый, Чёрный, Серый..." maxlength="50" required>
+                        {% if errors.car_color %}
+                        <div class="invalid-feedback">{{ errors.car_color }}</div>
+                        {% else %}
+                        <div class="invalid-feedback">Введите цвет машины</div>
+                        {% endif %}
                     </div>
-                    <button type="submit" class="btn btn-success">Добавить</button>
-                </form>
+
+                    <!-- Note -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Примечание</label>
+                        <textarea name="car_note" id="car_note" class="form-control" rows="3"
+                                  placeholder="Дополнительная информация...">{{ form.car_note or '' }}</textarea>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-</div>
+
+    <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary px-4">
+            <i class="bi bi-save me-1"></i>Сохранить клиента и машину
+        </button>
+        <a href="/clients" class="btn btn-outline-secondary">Отмена</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    // Phone: only digits, auto format 4-3-3
+    const phoneInput = document.getElementById('phone');
+    phoneInput.addEventListener('input', function () {
+        let digits = this.value.replace(/\D/g, '').slice(0, 10);
+        let formatted = digits;
+        if (digits.length > 7) {
+            formatted = digits.slice(0, 4) + '-' + digits.slice(4, 7) + '-' + digits.slice(7);
+        } else if (digits.length > 4) {
+            formatted = digits.slice(0, 4) + '-' + digits.slice(4);
+        }
+        this.value = formatted;
+    });
+
+    // INN: only digits, max 14
+    const innInput = document.getElementById('inn');
+    innInput.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 14);
+    });
+
+    // Form validation
+    const form = document.getElementById('addClientForm');
+    form.addEventListener('submit', function (e) {
+        let valid = true;
+
+        const fio = document.getElementById('fio');
+        if (!fio.value.trim()) {
+            fio.classList.add('is-invalid');
+            valid = false;
+        } else {
+            fio.classList.remove('is-invalid');
+            fio.classList.add('is-valid');
+        }
+
+        const phoneDigits = phoneInput.value.replace(/\D/g, '');
+        if (phoneDigits.length !== 10) {
+            phoneInput.classList.add('is-invalid');
+            valid = false;
+        } else {
+            phoneInput.classList.remove('is-invalid');
+            phoneInput.classList.add('is-valid');
+        }
+
+        const inn = document.getElementById('inn');
+        if (inn.value.replace(/\D/g, '').length !== 14) {
+            inn.classList.add('is-invalid');
+            valid = false;
+        } else {
+            inn.classList.remove('is-invalid');
+            inn.classList.add('is-valid');
+        }
+
+        const carNumber = document.getElementById('car_number');
+        if (!carNumber.value.trim()) {
+            carNumber.classList.add('is-invalid');
+            valid = false;
+        } else {
+            carNumber.classList.remove('is-invalid');
+            carNumber.classList.add('is-valid');
+        }
+
+        const carBrand = document.getElementById('car_brand');
+        if (!carBrand.value.trim()) {
+            carBrand.classList.add('is-invalid');
+            valid = false;
+        } else {
+            carBrand.classList.remove('is-invalid');
+            carBrand.classList.add('is-valid');
+        }
+
+        const carColor = document.getElementById('car_color');
+        if (!carColor.value.trim()) {
+            carColor.classList.add('is-invalid');
+            valid = false;
+        } else {
+            carColor.classList.remove('is-invalid');
+            carColor.classList.add('is-valid');
+        }
+
+        if (!valid) {
+            e.preventDefault();
+        } else {
+            // Strip formatting from phone before submit
+            phoneInput.value = phoneDigits;
+        }
+    });
+})();
+</script>
 {% endblock %}

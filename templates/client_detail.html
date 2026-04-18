@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{{ client.fio }} — AltaiGlobal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4 class="mb-0"><i class="bi bi-person me-2"></i>{{ client.fio }}</h4>
+    <div class="d-flex gap-2">
+        <a href="/edit-client/{{ client.id }}" class="btn btn-outline-warning">
+            <i class="bi bi-pencil me-1"></i>Редактировать
+        </a>
+        <a href="/add-car?client_id={{ client.id }}" class="btn btn-success">
+            <i class="bi bi-car-front me-1"></i>Добавить машину
+        </a>
+        <a href="/clients" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>К списку
+        </a>
+    </div>
+</div>
+
+<!-- Client info -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+        <i class="bi bi-person-badge me-2"></i>Данные клиента
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="text-muted small">ФИО</div>
+                <div class="fw-semibold">{{ client.fio }}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Телефон</div>
+                <div class="fw-semibold">{{ client.phone[:4] }}-{{ client.phone[4:7] }}-{{ client.phone[7:] }}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">ИНН</div>
+                <div class="fw-semibold font-monospace">{{ client.inn }}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Дата добавления</div>
+                <div class="fw-semibold">{{ client.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cars -->
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0"><i class="bi bi-car-front me-2"></i>Автомобили ({{ client.cars|length }})</h5>
+    <a href="/add-car?client_id={{ client.id }}" class="btn btn-sm btn-success">
+        <i class="bi bi-plus me-1"></i>Добавить ещё машину
+    </a>
+</div>
+
+{% if client.cars %}
+<div class="row g-3">
+    {% for car in client.cars %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span class="badge bg-dark font-monospace fs-6">{{ car.number }}</span>
+                <div>
+                    <a href="/edit-car/{{ car.id }}" class="btn btn-sm btn-outline-warning me-1" title="Редактировать">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    <form action="/delete-car/{{ car.id }}" method="post" class="d-inline"
+                          onsubmit="return confirm('Удалить машину {{ car.number }}?')">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <span class="text-muted small">Марка:</span>
+                    <span class="fw-semibold ms-1">{{ car.brand }}</span>
+                </div>
+                <div class="mb-2">
+                    <span class="text-muted small">Цвет:</span>
+                    <span class="fw-semibold ms-1">{{ car.color }}</span>
+                </div>
+                {% if car.note %}
+                <div class="mt-2 p-2 bg-light rounded">
+                    <span class="text-muted small"><i class="bi bi-chat-left-text me-1"></i>{{ car.note }}</span>
+                </div>
+                {% endif %}
+                <div class="mt-2 text-muted small">
+                    Добавлена: {{ car.created_at.strftime('%d.%m.%Y') }}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-4 border rounded bg-white">
+    <i class="bi bi-car-front display-4 text-muted"></i>
+    <p class="mt-2 text-muted">Машин нет</p>
+    <a href="/add-car?client_id={{ client.id }}" class="btn btn-success">
+        <i class="bi bi-plus me-1"></i>Добавить машину
+    </a>
+</div>
+{% endif %}
+
+<div class="mt-4">
+    <form action="/delete-client/{{ client.id }}" method="post"
+          onsubmit="return confirm('Удалить клиента {{ client.fio }} и все его машины?')">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash me-1"></i>Удалить клиента со всеми машинами
+        </button>
+    </form>
+</div>
+{% endblock %}

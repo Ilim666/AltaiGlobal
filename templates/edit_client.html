@@ -1,32 +1,108 @@
 {% extends "base.html" %}
-
-{% block title %}Редактирование клиента - AltaiGlobal{% endblock %}
+{% block title %}Редактировать клиента — AltaiGlobal{% endblock %}
 
 {% block content %}
-<h1>Редактирование клиента</h1>
+<div class="page-header">
+    <h4 class="mb-0"><i class="bi bi-pencil me-2"></i>Редактировать клиента</h4>
+    <a href="/client/{{ client.id }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Назад
+    </a>
+</div>
 
-<div class="row">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <form method="POST">
-                    <div class="mb-3">
-                        <label for="name" class="form-label">Имя</label>
-                        <input type="text" class="form-control" id="name" name="name" value="{{ client.name }}" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="phone" class="form-label">Телефон</label>
-                        <input type="text" class="form-control" id="phone" name="phone" value="{{ client.phone }}" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="address" class="form-label">Адрес</label>
-                        <input type="text" class="form-control" id="address" name="address" value="{{ client.address }}" required>
-                    </div>
-                    <button type="submit" class="btn btn-success">Сохранить</button>
-                    <a href="/clients" class="btn btn-secondary">Отмена</a>
-                </form>
+<div class="card shadow-sm" style="max-width: 560px;">
+    <div class="card-header bg-warning">
+        <i class="bi bi-person-badge me-2"></i>{{ client.fio }}
+    </div>
+    <div class="card-body">
+        <form method="post" id="editClientForm" novalidate>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">ФИО <span class="text-danger">*</span></label>
+                <input type="text" name="fio" id="fio" class="form-control {% if errors.fio %}is-invalid{% endif %}"
+                       value="{{ client.fio }}" maxlength="100" required>
+                {% if errors.fio %}
+                <div class="invalid-feedback">{{ errors.fio }}</div>
+                {% else %}
+                <div class="invalid-feedback">Введите ФИО</div>
+                {% endif %}
             </div>
-        </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Телефон <span class="text-danger">*</span></label>
+                <input type="text" name="phone" id="phone" class="form-control {% if errors.phone %}is-invalid{% endif %}"
+                       value="{{ client.phone[:4] }}-{{ client.phone[4:7] }}-{{ client.phone[7:] }}" maxlength="12" required>
+                {% if errors.phone %}
+                <div class="invalid-feedback">{{ errors.phone }}</div>
+                {% else %}
+                <div class="invalid-feedback">Введите ровно 10 цифр (формат 4-3-3)</div>
+                {% endif %}
+                <div class="form-text">Формат: 0555-123-456 (10 цифр)</div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label fw-semibold">ИНН <span class="text-danger">*</span></label>
+                <input type="text" name="inn" id="inn" class="form-control {% if errors.inn %}is-invalid{% endif %}"
+                       value="{{ client.inn }}" maxlength="14" required>
+                {% if errors.inn %}
+                <div class="invalid-feedback">{{ errors.inn }}</div>
+                {% else %}
+                <div class="invalid-feedback">ИНН должен содержать ровно 14 цифр</div>
+                {% endif %}
+                <div class="form-text">14 цифр</div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning px-4">
+                    <i class="bi bi-save me-1"></i>Сохранить
+                </button>
+                <a href="/client/{{ client.id }}" class="btn btn-outline-secondary">Отмена</a>
+            </div>
+        </form>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const phoneInput = document.getElementById('phone');
+    phoneInput.addEventListener('input', function () {
+        let digits = this.value.replace(/\D/g, '').slice(0, 10);
+        let formatted = digits;
+        if (digits.length > 7) {
+            formatted = digits.slice(0, 4) + '-' + digits.slice(4, 7) + '-' + digits.slice(7);
+        } else if (digits.length > 4) {
+            formatted = digits.slice(0, 4) + '-' + digits.slice(4);
+        }
+        this.value = formatted;
+    });
+
+    const innInput = document.getElementById('inn');
+    innInput.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 14);
+    });
+
+    const form = document.getElementById('editClientForm');
+    form.addEventListener('submit', function (e) {
+        let valid = true;
+
+        const fio = document.getElementById('fio');
+        if (!fio.value.trim()) { fio.classList.add('is-invalid'); valid = false; }
+        else { fio.classList.remove('is-invalid'); }
+
+        const phoneDigits = phoneInput.value.replace(/\D/g, '');
+        if (phoneDigits.length !== 10) { phoneInput.classList.add('is-invalid'); valid = false; }
+        else { phoneInput.classList.remove('is-invalid'); }
+
+        const inn = document.getElementById('inn');
+        if (inn.value.length !== 14) { inn.classList.add('is-invalid'); valid = false; }
+        else { inn.classList.remove('is-invalid'); }
+
+        if (!valid) {
+            e.preventDefault();
+        } else {
+            phoneInput.value = phoneDigits;
+        }
+    });
+})();
+</script>
 {% endblock %}

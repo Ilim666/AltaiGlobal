@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Редактировать машину — AltaiGlobal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4 class="mb-0"><i class="bi bi-pencil me-2"></i>Редактировать машину</h4>
+    <a href="/client/{{ car.client_id }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>К клиенту
+    </a>
+</div>
+
+<div class="card shadow-sm" style="max-width: 560px;">
+    <div class="card-header bg-warning">
+        <i class="bi bi-car-front me-2"></i>{{ car.number }} — {{ car.brand }}
+    </div>
+    <div class="card-body">
+        <form method="post" id="editCarForm" novalidate>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Номер машины <span class="text-danger">*</span></label>
+                <input type="text" name="car_number" id="car_number"
+                       class="form-control {% if errors.car_number %}is-invalid{% endif %}"
+                       value="{{ car.number }}" maxlength="20" required>
+                {% if errors.car_number %}
+                <div class="invalid-feedback">{{ errors.car_number }}</div>
+                {% else %}
+                <div class="invalid-feedback">Введите номер машины</div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Марка <span class="text-danger">*</span></label>
+                <input type="text" name="car_brand" id="car_brand"
+                       class="form-control {% if errors.car_brand %}is-invalid{% endif %}"
+                       value="{{ car.brand }}" maxlength="100" required>
+                {% if errors.car_brand %}
+                <div class="invalid-feedback">{{ errors.car_brand }}</div>
+                {% else %}
+                <div class="invalid-feedback">Введите марку</div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Цвет <span class="text-danger">*</span></label>
+                <input type="text" name="car_color" id="car_color"
+                       class="form-control {% if errors.car_color %}is-invalid{% endif %}"
+                       value="{{ car.color }}" maxlength="50" required>
+                {% if errors.car_color %}
+                <div class="invalid-feedback">{{ errors.car_color }}</div>
+                {% else %}
+                <div class="invalid-feedback">Введите цвет</div>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Примечание</label>
+                <textarea name="car_note" class="form-control" rows="3">{{ car.note or '' }}</textarea>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning px-4">
+                    <i class="bi bi-save me-1"></i>Сохранить
+                </button>
+                <a href="/client/{{ car.client_id }}" class="btn btn-outline-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const form = document.getElementById('editCarForm');
+    form.addEventListener('submit', function (e) {
+        let valid = true;
+        ['car_number', 'car_brand', 'car_color'].forEach(function(id) {
+            const el = document.getElementById(id);
+            if (!el.value.trim()) { el.classList.add('is-invalid'); valid = false; }
+            else { el.classList.remove('is-invalid'); }
+        });
+        if (!valid) e.preventDefault();
+    });
+})();
+</script>
+{% endblock %}

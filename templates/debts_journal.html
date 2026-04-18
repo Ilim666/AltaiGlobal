@@ -128,13 +128,33 @@
 document.getElementById('payModal').addEventListener('show.bs.modal', function (event) {
     var btn = event.relatedTarget;
     var saleId = btn.getAttribute('data-sale-id');
-    var remaining = btn.getAttribute('data-remaining');
+    var remaining = parseFloat(btn.getAttribute('data-remaining'));
     var client = btn.getAttribute('data-client');
     document.getElementById('modalClient').textContent = client;
-    document.getElementById('modalRemaining').textContent = remaining;
-    document.getElementById('payAmount').value = remaining;
-    document.getElementById('payAmount').max = remaining;
+    document.getElementById('modalRemaining').textContent = btn.getAttribute('data-remaining');
+    var amountInput = document.getElementById('payAmount');
+    amountInput.value = remaining;
+    amountInput.max = remaining;
     document.getElementById('payForm').action = '/pay-debt/' + saleId;
+});
+
+document.getElementById('payForm').addEventListener('submit', function (e) {
+    var amountInput = document.getElementById('payAmount');
+    var val = parseFloat(amountInput.value);
+    var max = parseFloat(amountInput.max);
+    if (isNaN(val) || val <= 0) {
+        e.preventDefault();
+        amountInput.setCustomValidity('Введите корректную сумму оплаты.');
+        amountInput.reportValidity();
+        return;
+    }
+    if (val > max) {
+        e.preventDefault();
+        amountInput.setCustomValidity('Сумма не может превышать остаток: ' + max);
+        amountInput.reportValidity();
+        return;
+    }
+    amountInput.setCustomValidity('');
 });
 </script>
 {% endblock %}

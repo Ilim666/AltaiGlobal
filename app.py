@@ -69,7 +69,11 @@ class Payment(db.Model):
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False)
     sale_id = db.Column(db.Integer, db.ForeignKey("sale.id"), nullable=True)
     amount = db.Column(db.Float, nullable=False)
-    payment_type = db.Column(db.String(20), nullable=False)  # "продажа" or "долг"
+    payment_type = db.Column(
+        db.String(20),
+        db.CheckConstraint("payment_type IN ('продажа', 'долг')"),
+        nullable=False,
+    )
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     client = db.relationship("Client", backref=db.backref("payments", lazy=True))
 

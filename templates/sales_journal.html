@@ -30,8 +30,9 @@
                     <th>Литры</th>
                     <th>Цена / л</th>
                     <th>Сумма</th>
-                    <th>Способ оплаты</th>
                     <th>Сумма оплаты</th>
+                    <th>Способ оплаты</th>
+                    <th>Остаток суммы</th>
                     <th>Примечание</th>
                 </tr>
             </thead>
@@ -48,6 +49,7 @@
                 <td>{{ s.liters }}</td>
                 <td>{{ s.price_per_liter }}</td>
                 <td><strong>{{ s.total }}</strong></td>
+                <td>{{ s.payment_amount if s.payment_amount is not none else '—' }}</td>
                 <td>
                     {% if s.payment_method == 'наличка' %}
                         <span class="badge bg-success">Наличка</span>
@@ -61,7 +63,13 @@
                         <span class="badge bg-secondary">{{ s.payment_method }}</span>
                     {% endif %}
                 </td>
-                <td>{{ s.payment_amount if s.payment_amount is not none else '—' }}</td>
+                <td>
+                    {% if s.payment_method == 'долг' %}
+                        {{ "%.2f"|format(s.total) }}
+                    {% else %}
+                        {{ "%.2f"|format((s.total - (s.payment_amount or 0))|float) }}
+                    {% endif %}
+                </td>
                 <td>{{ s.note or '—' }}</td>
             </tr>
             {% endfor %}

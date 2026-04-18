@@ -404,6 +404,7 @@ def sales():
                     sale_id=sale.id,
                     amount=payment_amount,
                     payment_type="продажа",
+                    payment_method=form["payment_method"],
                 )
                 db.session.add(payment)
             db.session.commit()
@@ -567,7 +568,9 @@ def cash():
 
     daily = {}
     for p in all_payments:
-        date_key = p.created_at.strftime("%d.%m.%Y")
+        sale_date = p.sale.created_at.date() if p.sale_id and p.sale else None
+        payment_date = p.created_at.date()
+        date_key = (sale_date or payment_date).strftime("%d.%m.%Y")
         if date_key not in daily:
             daily[date_key] = {
                 "date": date_key,
@@ -582,7 +585,11 @@ def cash():
         if p.payment_type == "продажа" and method in ("наличка", "безнал", "доллар"):
             daily[date_key][f"sale_{method}"] += p.amount
         elif p.payment_type == "долг" and method in ("наличка", "безнал", "доллар"):
-            daily[date_key][f"debt_{method}"] += p.amount
+            # Same-day debt payment counts as "today's sale"; older debt payments go to "from debts"
+            if sale_date and sale_date == payment_date:
+                daily[date_key][f"sale_{method}"] += p.amount
+            else:
+                daily[date_key][f"debt_{method}"] += p.amount
 
     rows = []
     for data in daily.values():

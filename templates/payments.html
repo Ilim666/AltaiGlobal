@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Журнал оплат — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">💳 Журнал оплат</h2>
+</div>
+
+<form method="get" action="/payments" class="mb-4">
+    <div class="input-group">
+        <input type="text" name="q" class="form-control"
+               placeholder="Поиск по имени клиента…"
+               value="{{ q or '' }}">
+        <button class="btn btn-outline-secondary" type="submit">🔍 Найти</button>
+        {% if q %}
+        <a href="/payments" class="btn btn-outline-danger">✕ Сбросить</a>
+        {% endif %}
+    </div>
+</form>
+
+{% if payments %}
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Клиент</th>
+                    <th>Телефон</th>
+                    <th>Тип</th>
+                    <th>Сумма</th>
+                    <th>Дата оплаты</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for p in payments %}
+            <tr>
+                <td>
+                    <a href="/client/{{ p.client.id }}" class="text-decoration-none">
+                        {{ p.client.fio }}
+                    </a>
+                </td>
+                <td>{{ p.client.phone | fmt_phone }}</td>
+                <td>
+                    {% if p.payment_type == 'продажа' %}
+                        <span class="badge bg-success">Продажа</span>
+                    {% else %}
+                        <span class="badge bg-primary">Долг</span>
+                    {% endif %}
+                </td>
+                <td><strong>{{ "%.2f"|format(p.amount) }}</strong></td>
+                <td>{{ p.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    {% if q %}
+    По запросу «{{ q }}» оплат не найдено. <a href="/payments">Показать все</a>.
+    {% else %}
+    Оплат пока нет.
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

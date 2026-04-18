@@ -58,6 +58,20 @@ class Sale(db.Model):
     payment_amount = db.Column(db.Float, nullable=True)
     note = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    payments = db.relationship("Payment", backref="sale", lazy=True, cascade="all, delete-orphan")
+
+
+PAYMENT_TYPES = ["продажа", "долг"]
+
+
+class Payment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False)
+    sale_id = db.Column(db.Integer, db.ForeignKey("sale.id"), nullable=True)
+    amount = db.Column(db.Float, nullable=False)
+    payment_type = db.Column(db.String(20), nullable=False)  # "продажа" or "долг"
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    client = db.relationship("Client", backref=db.backref("payments", lazy=True))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -378,6 +392,15 @@ def sales():
                 note=form["note"] or None,
             )
             db.session.add(sale)
+            db.session.flush()
+            if form["payment_method"] != "долг" and payment_amount:
+                payment = Payment(
+                    client_id=car.client_id,
+                    sale_id=sale.id,
+                    amount=payment_amount,
+                    payment_type="продажа",
+                )
+                db.session.add(payment)
             db.session.commit()
             return redirect(url_for("sales_journal"))
 
@@ -484,6 +507,48 @@ def debts_by_client():
     }
 
     return render_template("debts_by_client.html", rows=rows, totals=totals, q=q)
+
+
+@app.route("/pay-debt/<int:sale_id>", methods=["POST"])
+def pay_debt(sale_id):
+    sale = Sale.query.options(joinedload(Sale.car).joinedload(Car.client)).get_or_404(sale_id)
+    amount_str = request.form.get("amount", "").strip()
+    try:
+        amount = float(amount_str)
+        if amount <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        return redirect(url_for("debts_journal"))
+
+    remaining = sale.total - (sale.payment_amount or 0.0)
+    if amount > remaining:
+        amount = remaining
+
+    sale.payment_amount = round((sale.payment_amount or 0.0) + amount, 2)
+
+    payment = Payment(
+        client_id=sale.car.client_id,
+        sale_id=sale.id,
+        amount=amount,
+        payment_type="долг",
+    )
+    db.session.add(payment)
+    db.session.commit()
+    return redirect(url_for("debts_journal"))
+
+
+@app.route("/payments")
+def payments():
+    q = request.args.get("q", "").strip()
+    query = (
+        Payment.query
+        .join(Payment.client)
+        .order_by(Payment.created_at.desc())
+    )
+    if q:
+        query = query.filter(Client.fio.ilike(f"%{q}%"))
+    all_payments = query.all()
+    return render_template("payments.html", payments=all_payments, q=q)
 
 
 if __name__ == "__main__":

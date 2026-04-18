@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Касса — AltaiGlobal{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h2 class="mb-0">💵 Касса</h2>
+</div>
+
+{% if rows %}
+<div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle text-nowrap">
+        <thead class="table-dark">
+            <tr>
+                <th>Дата</th>
+                <th>Наличка сегодня</th>
+                <th>Безнал сегодня</th>
+                <th>Доллар сегодня</th>
+                <th>Наличка от долгов</th>
+                <th>Безнал от долгов</th>
+                <th>Доллар от долгов</th>
+                <th>Наличка всего</th>
+                <th>Безнал всего</th>
+                <th>Доллар всего</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td><strong>{{ row.date }}</strong></td>
+                <td>{{ "%.2f"|format(row.sale_наличка) }}</td>
+                <td>{{ "%.2f"|format(row.sale_безнал) }}</td>
+                <td>{{ "%.2f"|format(row.sale_доллар) }}</td>
+                <td>{{ "%.2f"|format(row.debt_наличка) }}</td>
+                <td>{{ "%.2f"|format(row.debt_безнал) }}</td>
+                <td>{{ "%.2f"|format(row.debt_доллар) }}</td>
+                <td><strong>{{ "%.2f"|format(row.total_наличка) }}</strong></td>
+                <td><strong>{{ "%.2f"|format(row.total_безнал) }}</strong></td>
+                <td><strong>{{ "%.2f"|format(row.total_доллар) }}</strong></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">Данных пока нет.</div>
+{% endif %}
+{% endblock %}

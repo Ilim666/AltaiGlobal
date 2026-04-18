@@ -561,6 +561,46 @@ def payments():
     return render_template("payments.html", payments=all_payments, q=q)
 
 
+@app.route("/cash")
+def cash():
+    all_payments = Payment.query.order_by(Payment.created_at.desc()).all()
+
+    daily = {}
+    for p in all_payments:
+        date_key = p.created_at.strftime("%d.%m.%Y")
+        if date_key not in daily:
+            daily[date_key] = {
+                "date": date_key,
+                "sale_наличка": 0.0,
+                "sale_безнал": 0.0,
+                "sale_доллар": 0.0,
+                "debt_наличка": 0.0,
+                "debt_безнал": 0.0,
+                "debt_доллар": 0.0,
+            }
+        method = p.payment_method or ""
+        if p.payment_type == "продажа" and method in ("наличка", "безнал", "доллар"):
+            daily[date_key][f"sale_{method}"] += p.amount
+        elif p.payment_type == "долг" and method in ("наличка", "безнал", "доллар"):
+            daily[date_key][f"debt_{method}"] += p.amount
+
+    rows = []
+    for data in daily.values():
+        row = dict(data)
+        row["total_наличка"] = round(row["sale_наличка"] + row["debt_наличка"], 2)
+        row["total_безнал"] = round(row["sale_безнал"] + row["debt_безнал"], 2)
+        row["total_доллар"] = round(row["sale_доллар"] + row["debt_доллар"], 2)
+        row["sale_наличка"] = round(row["sale_наличка"], 2)
+        row["sale_безнал"] = round(row["sale_безнал"], 2)
+        row["sale_доллар"] = round(row["sale_доллар"], 2)
+        row["debt_наличка"] = round(row["debt_наличка"], 2)
+        row["debt_безнал"] = round(row["debt_безнал"], 2)
+        row["debt_доллар"] = round(row["debt_доллар"], 2)
+        rows.append(row)
+
+    return render_template("cash.html", rows=rows)
+
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()

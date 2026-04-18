@@ -3,6 +3,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">💳 Журнал оплат</h2>
+    <a href="/debts-journal" class="btn btn-outline-secondary">📊 Журнал долгов</a>
 </div>
 
 <form method="get" action="/payments" class="mb-4">
@@ -23,16 +24,19 @@
         <table class="table table-hover mb-0">
             <thead class="table-dark">
                 <tr>
+                    <th>Дата и время оплаты</th>
                     <th>Клиент</th>
                     <th>Телефон</th>
-                    <th>Тип</th>
+                    <th>Тип оплаты</th>
                     <th>Сумма</th>
-                    <th>Дата оплаты</th>
+                    <th>Способ оплаты</th>
+                    <th>Примечание</th>
                 </tr>
             </thead>
             <tbody>
             {% for p in payments %}
             <tr>
+                <td>{{ p.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                 <td>
                     <a href="/client/{{ p.client.id }}" class="text-decoration-none">
                         {{ p.client.fio }}
@@ -47,7 +51,23 @@
                     {% endif %}
                 </td>
                 <td><strong>{{ "%.2f"|format(p.amount) }}</strong></td>
-                <td>{{ p.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>
+                    {% set method = p.sale.payment_method if p.sale else none %}
+                    {% if method == 'наличка' %}
+                        <span class="badge bg-success">Наличка</span>
+                    {% elif method == 'безнал' %}
+                        <span class="badge bg-primary">Безнал</span>
+                    {% elif method == 'доллар' %}
+                        <span class="badge bg-warning text-dark">Доллар</span>
+                    {% elif method == 'долг' %}
+                        <span class="badge bg-danger">Долг</span>
+                    {% elif method %}
+                        <span class="badge bg-secondary">{{ method }}</span>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>{{ p.sale.note if p.sale and p.sale.note else '—' }}</td>
             </tr>
             {% endfor %}
             </tbody>

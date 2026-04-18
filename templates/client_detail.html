@@ -20,7 +20,7 @@
             </div>
             <div class="col-md-4">
                 <p class="mb-1 text-muted small">Телефон</p>
-                <p class="fw-semibold">{{ client.phone[:4] }}-{{ client.phone[4:7] }}-{{ client.phone[7:] }}</p>
+                <p class="fw-semibold">{{ client.phone | fmt_phone }}</p>
             </div>
             <div class="col-md-4">
                 <p class="mb-1 text-muted small">ИНН</p>

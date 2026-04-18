@@ -26,7 +26,7 @@
             <tr style="cursor:pointer" onclick="location.href='/client/{{ c.id }}'">
                 <td>{{ c.id }}</td>
                 <td><strong>{{ c.fio }}</strong></td>
-                <td>{{ c.phone[:4] }}-{{ c.phone[4:7] }}-{{ c.phone[7:] }}</td>
+                <td>{{ c.phone | fmt_phone }}</td>
                 <td>{{ c.inn }}</td>
                 <td><span class="badge bg-secondary">{{ c.cars|length }}</span></td>
                 <td>{{ c.created_at.strftime('%d.%m.%Y') }}</td>

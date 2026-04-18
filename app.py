@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Flask, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
@@ -10,6 +10,17 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 
+def fmt_phone(phone):
+    """Format a 10-digit phone string as XXXX-XXX-XXX."""
+    digits = re.sub(r"\D", "", str(phone or ""))
+    if len(digits) == 10:
+        return f"{digits[:4]}-{digits[4:7]}-{digits[7:]}"
+    return phone or ""
+
+
+app.jinja_env.filters["fmt_phone"] = fmt_phone
+
+
 # ── Models ────────────────────────────────────────────────────────────────────
 
 class Client(db.Model):
@@ -17,7 +28,7 @@ class Client(db.Model):
     fio = db.Column(db.String(100), unique=True, nullable=False)
     phone = db.Column(db.String(10), nullable=False)
     inn = db.Column(db.String(14), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     cars = db.relationship("Car", backref="client", lazy=True, cascade="all, delete-orphan")
 
 
@@ -28,7 +39,7 @@ class Car(db.Model):
     brand = db.Column(db.String(100), nullable=False)
     color = db.Column(db.String(50), nullable=False)
     note = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

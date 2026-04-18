@@ -27,8 +27,6 @@
                     <th>Клиент</th>
                     <th>Телефон</th>
                     <th>Кол-во долгов</th>
-                    <th>Общий долг</th>
-                    <th>Всего оплачено</th>
                     <th>Остаток</th>
                 </tr>
             </thead>
@@ -42,8 +40,6 @@
                 </td>
                 <td>{{ r.client.phone | fmt_phone }}</td>
                 <td>{{ r.count }}</td>
-                <td><strong>{{ "%.2f"|format(r.total_debt) }}</strong></td>
-                <td>{{ "%.2f"|format(r.total_paid) }}</td>
                 <td><strong class="text-danger">{{ "%.2f"|format(r.remaining) }}</strong></td>
             </tr>
             {% endfor %}
@@ -53,8 +49,6 @@
                     <td>ИТОГО</td>
                     <td>—</td>
                     <td>{{ totals.count }}</td>
-                    <td>{{ "%.2f"|format(totals.total_debt) }}</td>
-                    <td>{{ "%.2f"|format(totals.total_paid) }}</td>
                     <td class="text-danger">{{ "%.2f"|format(totals.remaining) }}</td>
                 </tr>
             </tfoot>

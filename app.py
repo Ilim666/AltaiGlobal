@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+import re
 from typing import Dict, List
 
 from flask import Flask, render_template, request
@@ -14,6 +15,7 @@ app.config.setdefault("SQLALCHEMY_DATABASE_URI", "sqlite:///altaiglobal.db")
 app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
 
 db = SQLAlchemy(app)
+_SAFE_SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class Sale(db.Model):
@@ -68,6 +70,10 @@ def _remaining_goods_by_day(days: List[date]) -> Dict[date, float]:
 
     candidate_date_columns = ["updated_at", "created_at"]
     date_column = next((name for name in candidate_date_columns if name in columns), None)
+    if not _SAFE_SQL_IDENTIFIER.match(table_name) or not _SAFE_SQL_IDENTIFIER.match(remaining_column):
+        return {}
+    if date_column and not _SAFE_SQL_IDENTIFIER.match(date_column):
+        return {}
 
     if not date_column:
         total_remaining = db.session.execute(
@@ -155,6 +161,7 @@ def turnover():
 
         totals["average_price"] = totals["amount"] / totals["liters"] if totals["liters"] else 0.0
     except SQLAlchemyError:
+        app.logger.exception("Failed to build turnover report")
         rows_data = []
 
     return render_template(
@@ -167,4 +174,4 @@ def turnover():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()

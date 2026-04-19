@@ -994,16 +994,25 @@ def sales():
         form["payment_amount"] = request.form.get("payment_amount", "").strip()
         form["note"] = request.form.get("note", "").strip()
 
-        car = (
+        car = None
+        found_car = (
             Car.query
-            .join(Car.client)
-            .filter(Car.number == form["car_number"], Car.is_deleted.is_(False), Client.is_deleted.is_(False))
+            .options(joinedload(Car.client))
+            .filter(Car.number == form["car_number"])
             .first()
         ) if form["car_number"] else None
         if not form["car_number"]:
             errors["car_number"] = "Введите номер машины."
-        elif not car:
+        elif not found_car:
             errors["car_number"] = "Машина с таким номером не найдена."
+        elif found_car.is_deleted:
+            errors["car_number"] = "Эта машина удалена и больше не доступна."
+        elif not found_car.client:
+            errors["car_number"] = "Эта машина не связана с клиентом."
+        elif found_car.client.is_deleted:
+            errors["car_number"] = "Этот клиент удален и больше не доступен."
+        else:
+            car = found_car
 
         try:
             liters = float(form["liters"])
@@ -1542,6 +1551,15 @@ def debts_by_client():
 @login_required
 def pay_debt(sale_id):
     sale = Sale.query.options(joinedload(Sale.car).joinedload(Car.client)).get_or_404(sale_id)
+    if not sale.car:
+        flash("Машина не найдена. Невозможно создать платеж.", "danger")
+        return redirect(url_for("debts_journal"))
+
+    client = sale.car.client
+    if not client or client.is_deleted:
+        flash("Клиент удален. Невозможно создать платеж.", "danger")
+        return redirect(url_for("debts_journal"))
+
     amount_str = request.form.get("amount", "").strip()
     try:
         amount = Decimal(amount_str)

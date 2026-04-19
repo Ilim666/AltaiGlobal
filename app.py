@@ -941,23 +941,18 @@ if __name__ == "__main__":
             if not (legacy_user.password or "").startswith(("pbkdf2:", "scrypt:")):
                 legacy_user.password = generate_password_hash(legacy_user.password or "")
 
-        debug_mode = os.getenv("FLASK_DEBUG", "False") == "True"
-        admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD")
-        operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD")
-
-        if debug_mode:
-            admin_password = admin_password or "admin123"
-            operator_password = operator_password or "operator123"
+        admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD") or "admin123"
+        operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD") or "operator123"
 
         if not User.query.filter_by(username="admin").first():
-            if admin_password:
-                admin = User(username="admin", password=generate_password_hash(admin_password), role="admin")
-                db.session.add(admin)
+            admin = User(username="admin", password=generate_password_hash(admin_password), role="admin")
+            db.session.add(admin)
+            print("✅ Создан пользователь: admin")
 
         if not User.query.filter_by(username="operator").first():
-            if operator_password:
-                operator = User(username="operator", password=generate_password_hash(operator_password), role="operator")
-                db.session.add(operator)
+            operator = User(username="operator", password=generate_password_hash(operator_password), role="operator")
+            db.session.add(operator)
+            print("✅ Создан пользователь: operator")
 
         db.session.commit()
 

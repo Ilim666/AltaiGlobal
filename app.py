@@ -1,12 +1,16 @@
 import re
 import os
 import secrets
+from io import BytesIO
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from functools import wraps
 
-from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_sqlalchemy import SQLAlchemy
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy import case, func, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -104,6 +108,13 @@ class StockHistory(db.Model):
 PAYMENT_TYPES = ["продажа", "долг"]
 DEBT_PAYMENT_TYPE = "долг"
 
+REPORT_TYPE_LABELS = {
+    "sales": "Журнал продаж",
+    "payments": "Журнал оплат",
+    "cash": "Касса",
+    "turnover": "Оборот",
+}
+
 
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -176,6 +187,45 @@ def _coerce_day(value):
         except ValueError:
             return None
     return None
+
+
+def _parse_month_value(month_value):
+    if not month_value:
+        return None
+    try:
+        return datetime.strptime(month_value, "%Y-%m").date().replace(day=1)
+    except ValueError:
+        return None
+
+
+def _month_bounds(month_value=None):
+    month_start = _parse_month_value(month_value)
+    if not month_start:
+        today = datetime.now(timezone.utc).date()
+        month_start = today.replace(day=1)
+    next_month_start = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    month_end = next_month_start - timedelta(days=1)
+    return month_start, month_end, month_start.strftime("%Y-%m")
+
+
+def _month_label(month_start):
+    months_ru = [
+        "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+        "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
+    ]
+    return f"{months_ru[month_start.month - 1]} {month_start.year}"
+
+
+def _month_label_filename(month_start):
+    return _month_label(month_start).replace(" ", "")
+
+
+def _format_number(value):
+    return round(float(value or 0), 2)
+
+
+def _month_datetime_bounds(start_date, end_date):
+    return datetime.combine(start_date, time.min), datetime.combine(end_date + timedelta(days=1), time.min)
 
 
 def _remaining_goods_by_day(days):
@@ -980,15 +1030,371 @@ def sales():
     )
 
 
+def _build_sales_report_payload(start_date, end_date):
+    start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
+    sales = (
+        Sale.query
+        .options(joinedload(Sale.car).joinedload(Car.client))
+        .join(Sale.car)
+        .join(Car.client)
+        .filter(Sale.created_at >= start_dt, Sale.created_at < end_dt)
+        .order_by(Sale.created_at.desc())
+        .all()
+    )
+    rows = []
+    for sale in sales:
+        payment_amount = _format_number(sale.payment_amount)
+        total = _format_number(sale.total)
+        rows.append(
+            {
+                "date": sale.created_at.strftime("%d.%m.%Y %H:%M"),
+                "client": sale.car.client.fio,
+                "car_number": sale.car.number,
+                "liters": _format_number(sale.liters),
+                "price_per_liter": _format_number(sale.price_per_liter),
+                "total": total,
+                "payment_amount": payment_amount if sale.payment_amount is not None else "—",
+                "payment_method": sale.payment_method or "—",
+                "remaining": _format_number(total - payment_amount),
+                "note": sale.note or "—",
+            }
+        )
+    return {
+        "columns": [
+            {"key": "date", "label": "Дата"},
+            {"key": "client", "label": "Клиент"},
+            {"key": "car_number", "label": "Номер машины"},
+            {"key": "liters", "label": "Литры"},
+            {"key": "price_per_liter", "label": "Цена / л"},
+            {"key": "total", "label": "Сумма"},
+            {"key": "payment_amount", "label": "Сумма оплаты"},
+            {"key": "payment_method", "label": "Способ оплаты"},
+            {"key": "remaining", "label": "Остаток суммы"},
+            {"key": "note", "label": "Примечание"},
+        ],
+        "rows": rows,
+    }
+
+
+def _build_payments_report_payload(start_date, end_date):
+    start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
+    payments_data = (
+        Payment.query
+        .options(joinedload(Payment.sale).joinedload(Sale.car), joinedload(Payment.client))
+        .join(Payment.client)
+        .filter(Payment.created_at >= start_dt, Payment.created_at < end_dt)
+        .order_by(Payment.created_at.desc())
+        .all()
+    )
+    rows = []
+    for payment in payments_data:
+        sale = payment.sale
+        remaining = _format_number((sale.total - (sale.payment_amount or 0)) if sale else 0)
+        rows.append(
+            {
+                "sale_date": sale.created_at.strftime("%d.%m.%Y %H:%M") if sale else "—",
+                "client": payment.client.fio,
+                "car_number": sale.car.number if sale and sale.car else "—",
+                "liters": _format_number(sale.liters) if sale else "—",
+                "price_per_liter": _format_number(sale.price_per_liter) if sale else "—",
+                "total": _format_number(sale.total) if sale else "—",
+                "payment_amount": _format_number(payment.amount),
+                "payment_method": payment.payment_method or (sale.payment_method if sale else "—"),
+                "remaining": remaining,
+                "payment_date": payment.created_at.strftime("%d.%m.%Y %H:%M"),
+            }
+        )
+    return {
+        "columns": [
+            {"key": "sale_date", "label": "Дата продажи"},
+            {"key": "client", "label": "Клиент"},
+            {"key": "car_number", "label": "Номер машины"},
+            {"key": "liters", "label": "Литры"},
+            {"key": "price_per_liter", "label": "Цена / л"},
+            {"key": "total", "label": "Сумма"},
+            {"key": "payment_amount", "label": "Сумма оплаты"},
+            {"key": "payment_method", "label": "Способ оплаты"},
+            {"key": "remaining", "label": "Остаток суммы"},
+            {"key": "payment_date", "label": "Дата и время оплаты"},
+        ],
+        "rows": rows,
+    }
+
+
+def _build_cash_rows(start_date, end_date):
+    start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
+    all_payments = (
+        Payment.query
+        .filter(Payment.created_at >= start_dt, Payment.created_at < end_dt)
+        .order_by(Payment.created_at.desc())
+        .all()
+    )
+    daily = {}
+    for payment in all_payments:
+        date_key = payment.created_at.strftime("%d.%m.%Y")
+        if date_key not in daily:
+            daily[date_key] = {
+                "date": date_key,
+                "sale_наличка": 0.0,
+                "sale_безнал": 0.0,
+                "sale_доллар": 0.0,
+                "debt_наличка": 0.0,
+                "debt_безнал": 0.0,
+                "debt_доллар": 0.0,
+            }
+        method = payment.payment_method or ""
+        if payment.payment_type == "продажа" and method in ("наличка", "безнал", "доллар"):
+            daily[date_key][f"sale_{method}"] += payment.amount
+        elif payment.payment_type == "долг" and method in ("наличка", "безнал", "доллар"):
+            daily[date_key][f"debt_{method}"] += payment.amount
+
+    rows = []
+    for data in daily.values():
+        row = dict(data)
+        row["total_наличка"] = _format_number(row["sale_наличка"] + row["debt_наличка"])
+        row["total_безнал"] = _format_number(row["sale_безнал"] + row["debt_безнал"])
+        row["total_доллар"] = _format_number(row["sale_доллар"] + row["debt_доллар"])
+        row["sale_наличка"] = _format_number(row["sale_наличка"])
+        row["sale_безнал"] = _format_number(row["sale_безнал"])
+        row["sale_доллар"] = _format_number(row["sale_доллар"])
+        row["debt_наличка"] = _format_number(row["debt_наличка"])
+        row["debt_безнал"] = _format_number(row["debt_безнал"])
+        row["debt_доллар"] = _format_number(row["debt_доллар"])
+        rows.append(row)
+    rows.sort(key=lambda row: datetime.strptime(row["date"], "%d.%m.%Y"), reverse=True)
+    return rows
+
+
+def _build_cash_report_payload(start_date, end_date):
+    return {
+        "columns": [
+            {"key": "date", "label": "Дата"},
+            {"key": "sale_наличка", "label": "Наличка сегодня"},
+            {"key": "sale_безнал", "label": "Безнал сегодня"},
+            {"key": "sale_доллар", "label": "Доллар сегодня"},
+            {"key": "debt_наличка", "label": "Наличка от долгов"},
+            {"key": "debt_безнал", "label": "Безнал от долгов"},
+            {"key": "debt_доллар", "label": "Доллар от долгов"},
+            {"key": "total_наличка", "label": "Наличка всего"},
+            {"key": "total_безнал", "label": "Безнал всего"},
+            {"key": "total_доллар", "label": "Доллар всего"},
+        ],
+        "rows": _build_cash_rows(start_date, end_date),
+    }
+
+
+def _build_turnover_rows(start_date, end_date):
+    _ensure_daily_stock_tables()
+    sale_day = func.date(Sale.created_at)
+    payment_method = func.lower(func.coalesce(Sale.payment_method, ""))
+    min_dt, max_dt = _month_datetime_bounds(start_date, end_date)
+
+    sales_query = db.session.query(
+        sale_day.label("sale_date"),
+        func.coalesce(func.sum(Sale.liters), 0).label("liters"),
+        func.coalesce(func.sum(Sale.total), 0).label("amount"),
+        func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, 0), else_=func.coalesce(Sale.payment_amount, 0))), 0).label("payments"),
+        func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, Sale.total - func.coalesce(Sale.payment_amount, 0)), else_=0)), 0).label("debts"),
+    ).filter(Sale.created_at >= min_dt, Sale.created_at < max_dt)
+
+    rows_data = []
+    totals = {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0, "average_price": 0.0}
+    error_message = None
+
+    try:
+        grouped_sales = sales_query.group_by(sale_day).order_by(sale_day.desc()).all()
+        sales_by_day = {}
+        for row in grouped_sales:
+            row_date = _coerce_day(row.sale_date)
+            if not row_date:
+                continue
+            liters = float(row.liters or 0)
+            amount = float(row.amount or 0)
+            payments = float(row.payments or 0)
+            debts = float(row.debts or 0)
+            average_price = amount / liters if liters else 0.0
+            totals["liters"] += liters
+            totals["amount"] += amount
+            totals["payments"] += payments
+            totals["debts"] += debts
+            sales_by_day[row_date] = {
+                "liters": liters,
+                "amount": amount,
+                "payments": payments,
+                "debts": debts,
+                "average_price": average_price,
+            }
+
+        additions_by_day = {
+            _coerce_day(row.stock_date): float(row.added_liters or 0)
+            for row in db.session.query(
+                StockHistory.stock_date.label("stock_date"),
+                func.coalesce(func.sum(StockHistory.added_liters), 0).label("added_liters"),
+            ).filter(StockHistory.stock_date >= start_date, StockHistory.stock_date <= end_date).group_by(StockHistory.stock_date).all()
+            if _coerce_day(row.stock_date)
+        }
+        stock_by_day = {
+            _coerce_day(row.stock_date): float(row.current_stock or 0)
+            for row in db.session.query(
+                DailyStock.stock_date.label("stock_date"),
+                DailyStock.current_stock.label("current_stock"),
+            ).filter(DailyStock.stock_date >= start_date, DailyStock.stock_date <= end_date).all()
+            if _coerce_day(row.stock_date)
+        }
+
+        all_days = set(sales_by_day) | set(additions_by_day) | set(stock_by_day)
+        for row_date in sorted(all_days, reverse=True):
+            daily_sales = sales_by_day.get(
+                row_date,
+                {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0, "average_price": 0.0},
+            )
+            rows_data.append(
+                {
+                    "date": row_date,
+                    "date_label": row_date.strftime("%d.%m.%Y"),
+                    "liters": daily_sales["liters"],
+                    "amount": daily_sales["amount"],
+                    "payments": daily_sales["payments"],
+                    "debts": daily_sales["debts"],
+                    "average_price": daily_sales["average_price"],
+                    "remaining_goods": stock_by_day.get(row_date, 0.0),
+                    "added_liters": additions_by_day.get(row_date, 0.0),
+                }
+            )
+        totals["average_price"] = totals["amount"] / totals["liters"] if totals["liters"] else 0.0
+    except SQLAlchemyError:
+        app.logger.exception("Failed to build turnover report for date range %s - %s", start_date.isoformat(), end_date.isoformat())
+        rows_data = []
+        error_message = "Не удалось загрузить данные оборота. Проверьте подключение к базе данных."
+    return rows_data, totals, error_message
+
+
+def _build_turnover_report_payload(start_date, end_date):
+    rows_data, totals, error_message = _build_turnover_rows(start_date, end_date)
+    return {
+        "columns": [
+            {"key": "date_label", "label": "Дата"},
+            {"key": "liters", "label": "Литр"},
+            {"key": "amount", "label": "Сумма"},
+            {"key": "payments", "label": "Оплаты"},
+            {"key": "debts", "label": "Долги"},
+            {"key": "average_price", "label": "Средняя цена"},
+            {"key": "remaining_goods", "label": "Остаток товара"},
+            {"key": "added_liters", "label": "Поступление"},
+        ],
+        "rows": [
+            {
+                "date_label": row["date_label"],
+                "liters": _format_number(row["liters"]),
+                "amount": _format_number(row["amount"]),
+                "payments": _format_number(row["payments"]),
+                "debts": _format_number(row["debts"]),
+                "average_price": _format_number(row["average_price"]),
+                "remaining_goods": _format_number(row["remaining_goods"]),
+                "added_liters": _format_number(row["added_liters"]),
+            }
+            for row in rows_data
+        ],
+        "totals_row": {
+            "date_label": "ИТОГО",
+            "liters": _format_number(totals["liters"]),
+            "amount": _format_number(totals["amount"]),
+            "payments": _format_number(totals["payments"]),
+            "debts": _format_number(totals["debts"]),
+            "average_price": "—",
+            "remaining_goods": "—",
+            "added_liters": "—",
+        },
+        "error_message": error_message,
+    }
+
+
+def _build_report_payload(report_type, start_date, end_date):
+    if report_type == "sales":
+        return _build_sales_report_payload(start_date, end_date)
+    if report_type == "payments":
+        return _build_payments_report_payload(start_date, end_date)
+    if report_type == "cash":
+        return _build_cash_report_payload(start_date, end_date)
+    if report_type == "turnover":
+        return _build_turnover_report_payload(start_date, end_date)
+    return None
+
+
+def _report_excel_file(report_type, month_start, payload):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Отчет"
+    columns = payload.get("columns", [])
+    rows = payload.get("rows", [])
+    totals_row = payload.get("totals_row")
+    total_columns = max(1, len(columns))
+
+    title = f"{REPORT_TYPE_LABELS[report_type]} — {_month_label(month_start)}"
+    sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_columns)
+    title_cell = sheet.cell(row=1, column=1, value=title)
+    title_cell.font = Font(bold=True, size=14)
+    title_cell.alignment = Alignment(horizontal="center")
+
+    header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+    thin_side = Side(style="thin", color="000000")
+    border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+    header_row_index = 3
+    for idx, column in enumerate(columns, start=1):
+        cell = sheet.cell(row=header_row_index, column=idx, value=column["label"])
+        cell.font = Font(bold=True)
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = border
+
+    row_index = header_row_index + 1
+    for row in rows:
+        for col_idx, column in enumerate(columns, start=1):
+            cell = sheet.cell(row=row_index, column=col_idx, value=row.get(column["key"], ""))
+            cell.border = border
+        row_index += 1
+
+    if totals_row:
+        for col_idx, column in enumerate(columns, start=1):
+            cell = sheet.cell(row=row_index, column=col_idx, value=totals_row.get(column["key"], ""))
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+            cell.border = border
+
+    for col_idx in range(1, total_columns + 1):
+        max_length = 0
+        for row_cells in sheet.iter_rows(min_row=1, max_row=sheet.max_row, min_col=col_idx, max_col=col_idx):
+            value = row_cells[0].value
+            if value is None:
+                continue
+            max_length = max(max_length, len(str(value)))
+        sheet.column_dimensions[get_column_letter(col_idx)].width = min(max_length + 2, 60)
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    filename = f"Отчет_{REPORT_TYPE_LABELS[report_type]}_{_month_label_filename(month_start)}.xlsx"
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @app.route("/sales-journal")
 @login_required
 def sales_journal():
+    start_date, end_date, _ = _month_bounds()
+    start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
     q = request.args.get("q", "").strip()
     query = (
         Sale.query
         .options(joinedload(Sale.car).joinedload(Car.client))
         .join(Sale.car)
         .join(Car.client)
+        .filter(Sale.created_at >= start_dt, Sale.created_at < end_dt)
     )
     if q:
         query = query.filter(
@@ -1115,10 +1521,13 @@ def pay_debt(sale_id):
 @app.route("/payments")
 @login_required
 def payments():
+    start_date, end_date, _ = _month_bounds()
+    start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
     q = request.args.get("q", "").strip()
     query = (
         Payment.query
         .join(Payment.client)
+        .filter(Payment.created_at >= start_dt, Payment.created_at < end_dt)
         .order_by(Payment.created_at.desc())
     )
     if q:
@@ -1130,168 +1539,69 @@ def payments():
 @app.route("/cash")
 @login_required
 def cash():
-    all_payments = Payment.query.order_by(Payment.created_at.desc()).all()
-
-    daily = {}
-    for p in all_payments:
-        date_key = p.created_at.strftime("%d.%m.%Y")
-        if date_key not in daily:
-            daily[date_key] = {
-                "date": date_key,
-                "sale_наличка": 0.0,
-                "sale_безнал": 0.0,
-                "sale_доллар": 0.0,
-                "debt_наличка": 0.0,
-                "debt_безнал": 0.0,
-                "debt_доллар": 0.0,
-            }
-        method = p.payment_method or ""
-        if p.payment_type == "продажа" and method in ("наличка", "безнал", "доллар"):
-            daily[date_key][f"sale_{method}"] += p.amount
-        elif p.payment_type == "долг" and method in ("наличка", "безнал", "доллар"):
-            daily[date_key][f"debt_{method}"] += p.amount
-
-    rows = []
-    for data in daily.values():
-        row = dict(data)
-        row["total_наличка"] = round(row["sale_наличка"] + row["debt_наличка"], 2)
-        row["total_безнал"] = round(row["sale_безнал"] + row["debt_безнал"], 2)
-        row["total_доллар"] = round(row["sale_доллар"] + row["debt_доллар"], 2)
-        row["sale_наличка"] = round(row["sale_наличка"], 2)
-        row["sale_безнал"] = round(row["sale_безнал"], 2)
-        row["sale_доллар"] = round(row["sale_доллар"], 2)
-        row["debt_наличка"] = round(row["debt_наличка"], 2)
-        row["debt_безнал"] = round(row["debt_безнал"], 2)
-        row["debt_доллар"] = round(row["debt_доллар"], 2)
-        rows.append(row)
-
+    start_date, end_date, _ = _month_bounds()
+    rows = _build_cash_rows(start_date, end_date)
     return render_template("cash.html", rows=rows)
+
+
+@app.route("/reports")
+@login_required
+def reports():
+    _, _, default_month = _month_bounds()
+    return render_template(
+        "reports.html",
+        default_month=default_month,
+        report_type_labels=REPORT_TYPE_LABELS,
+        can_view_turnover=session.get("role") == "admin",
+    )
+
+
+@app.route("/api/reports")
+@login_required
+def api_reports():
+    report_type = request.args.get("report_type", "").strip()
+    month_value = request.args.get("month", "").strip()
+    start_date, end_date, normalized_month = _month_bounds(month_value)
+    if report_type not in REPORT_TYPE_LABELS:
+        return jsonify({"error": "Неверный тип отчета."}), 400
+    if report_type == "turnover" and session.get("role") != "admin":
+        return jsonify({"error": "Доступ запрещен."}), 403
+
+    payload = _build_report_payload(report_type, start_date, end_date)
+    response = {
+        "report_type": report_type,
+        "report_label": REPORT_TYPE_LABELS[report_type],
+        "month": normalized_month,
+        "month_label": _month_label(start_date),
+        "columns": payload.get("columns", []),
+        "rows": payload.get("rows", []),
+    }
+    if payload.get("totals_row"):
+        response["totals_row"] = payload["totals_row"]
+    if payload.get("error_message"):
+        response["error_message"] = payload["error_message"]
+    return jsonify(response)
+
+
+@app.route("/api/export-report")
+@login_required
+def export_report():
+    report_type = request.args.get("report_type", "").strip()
+    month_value = request.args.get("month", "").strip()
+    start_date, end_date, _ = _month_bounds(month_value)
+    if report_type not in REPORT_TYPE_LABELS:
+        return jsonify({"error": "Неверный тип отчета."}), 400
+    if report_type == "turnover" and session.get("role") != "admin":
+        return jsonify({"error": "Доступ запрещен."}), 403
+    payload = _build_report_payload(report_type, start_date, end_date)
+    return _report_excel_file(report_type, start_date, payload)
 
 
 @app.route("/turnover")
 @admin_required
 def turnover():
-    _ensure_daily_stock_tables()
-    start_date = _parse_iso_date(request.args.get("start_date"))
-    end_date = _parse_iso_date(request.args.get("end_date"))
-
-    sale_day = func.date(Sale.created_at)
-    payment_method = func.lower(func.coalesce(Sale.payment_method, ""))
-
-    sales_query = db.session.query(
-        sale_day.label("sale_date"),
-        func.coalesce(func.sum(Sale.liters), 0).label("liters"),
-        func.coalesce(func.sum(Sale.total), 0).label("amount"),
-        func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, 0), else_=func.coalesce(Sale.payment_amount, 0))), 0).label("payments"),
-        func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, Sale.total - func.coalesce(Sale.payment_amount, 0)), else_=0)), 0).label("debts"),
-    )
-
-    if start_date:
-        min_dt = datetime.combine(start_date, time.min)
-        sales_query = sales_query.filter(Sale.created_at >= min_dt)
-    if end_date:
-        max_dt = datetime.combine(end_date + timedelta(days=1), time.min)
-        sales_query = sales_query.filter(Sale.created_at < max_dt)
-
-    rows_data = []
-    totals = {
-        "liters": 0.0,
-        "amount": 0.0,
-        "payments": 0.0,
-        "debts": 0.0,
-        "average_price": 0.0,
-    }
-    error_message = None
-
-    try:
-        grouped_sales = (
-            sales_query.group_by(
-                sale_day,
-            )
-            .order_by(sale_day.desc())
-            .all()
-        )
-
-        sales_by_day = {}
-        for row in grouped_sales:
-            row_date = _coerce_day(row.sale_date)
-            if not row_date:
-                continue
-            liters = float(row.liters or 0)
-            amount = float(row.amount or 0)
-            payments = float(row.payments or 0)
-            debts = float(row.debts or 0)
-            average_price = amount / liters if liters else 0.0
-
-            totals["liters"] += liters
-            totals["amount"] += amount
-            totals["payments"] += payments
-            totals["debts"] += debts
-
-            sales_by_day[row_date] = {
-                "liters": liters,
-                "amount": amount,
-                "payments": payments,
-                "debts": debts,
-                "average_price": average_price,
-            }
-
-        history_query = db.session.query(
-            StockHistory.stock_date.label("stock_date"),
-            func.coalesce(func.sum(StockHistory.added_liters), 0).label("added_liters"),
-        )
-        stocks_query = db.session.query(
-            DailyStock.stock_date.label("stock_date"),
-            DailyStock.current_stock.label("current_stock"),
-        )
-
-        if start_date:
-            history_query = history_query.filter(StockHistory.stock_date >= start_date)
-            stocks_query = stocks_query.filter(DailyStock.stock_date >= start_date)
-        if end_date:
-            history_query = history_query.filter(StockHistory.stock_date <= end_date)
-            stocks_query = stocks_query.filter(DailyStock.stock_date <= end_date)
-
-        additions_by_day = {
-            _coerce_day(row.stock_date): float(row.added_liters or 0)
-            for row in history_query.group_by(StockHistory.stock_date).all()
-            if _coerce_day(row.stock_date)
-        }
-        stock_by_day = {
-            _coerce_day(row.stock_date): float(row.current_stock or 0)
-            for row in stocks_query.all()
-            if _coerce_day(row.stock_date)
-        }
-
-        all_days = set(sales_by_day) | set(additions_by_day) | set(stock_by_day)
-        for row_date in sorted(all_days, reverse=True):
-            daily_sales = sales_by_day.get(
-                row_date,
-                {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0, "average_price": 0.0},
-            )
-            rows_data.append(
-                {
-                    "date": row_date,
-                    "date_label": row_date.strftime("%d.%m.%Y"),
-                    "liters": daily_sales["liters"],
-                    "amount": daily_sales["amount"],
-                    "payments": daily_sales["payments"],
-                    "debts": daily_sales["debts"],
-                    "average_price": daily_sales["average_price"],
-                    "remaining_goods": stock_by_day.get(row_date, 0.0),
-                    "added_liters": additions_by_day.get(row_date, 0.0),
-                }
-            )
-
-        totals["average_price"] = totals["amount"] / totals["liters"] if totals["liters"] else 0.0
-    except SQLAlchemyError:
-        app.logger.exception(
-            "Failed to build turnover report for date range %s - %s",
-            start_date.isoformat() if start_date else "any",
-            end_date.isoformat() if end_date else "any",
-        )
-        rows_data = []
-        error_message = "Не удалось загрузить данные оборота. Проверьте подключение к базе данных."
+    start_date, end_date, _ = _month_bounds()
+    rows_data, totals, error_message = _build_turnover_rows(start_date, end_date)
 
     return render_template(
         "turnover.html",

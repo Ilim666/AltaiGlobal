@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Отчеты — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="container mt-2">
+    <h1>📊 Отчеты</h1>
+
+    <div class="card shadow-sm mt-3">
+        <div class="card-body">
+            <form id="reportForm">
+                <div class="mb-3">
+                    <label class="form-label">Тип отчета:</label>
+                    <div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="reportType" value="sales" id="sales">
+                            <label class="form-check-label" for="sales">📋 {{ report_type_labels["sales"] }}</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="reportType" value="payments" id="payments">
+                            <label class="form-check-label" for="payments">💳 {{ report_type_labels["payments"] }}</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="reportType" value="cash" id="cash">
+                            <label class="form-check-label" for="cash">💰 {{ report_type_labels["cash"] }}</label>
+                        </div>
+                        {% if can_view_turnover %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="reportType" value="turnover" id="turnover">
+                            <label class="form-check-label" for="turnover">📈 {{ report_type_labels["turnover"] }}</label>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="monthInput" class="form-label">Месяц и год:</label>
+                    <input type="month" class="form-control" id="monthInput" name="month" value="{{ default_month }}" required>
+                </div>
+
+                <button type="button" class="btn btn-primary" id="showBtn">Показать</button>
+                <button type="button" class="btn btn-success ms-2" id="exportBtn" disabled>📥 Экспорт в Excel</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="reportError" class="alert alert-danger mt-3 d-none"></div>
+
+    <div class="mt-4 d-none" id="tableContainer">
+        <h5 id="tableTitle" class="mb-3"></h5>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="reportTable">
+                <thead class="table-dark"></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentReportType = null;
+let currentMonth = null;
+
+const showBtn = document.getElementById("showBtn");
+const exportBtn = document.getElementById("exportBtn");
+const tableContainer = document.getElementById("tableContainer");
+const tableTitle = document.getElementById("tableTitle");
+const reportError = document.getElementById("reportError");
+const reportTable = document.getElementById("reportTable");
+
+function showError(message) {
+    reportError.textContent = message;
+    reportError.classList.remove("d-none");
+}
+
+function hideError() {
+    reportError.textContent = "";
+    reportError.classList.add("d-none");
+}
+
+function displayTable(data) {
+    const headers = (data.columns || []).map((col) => `<th>${col.label}</th>`).join("");
+    reportTable.querySelector("thead").innerHTML = `<tr>${headers}</tr>`;
+
+    const rows = (data.rows || []).map((row) => {
+        const tds = data.columns.map((col) => `<td>${row[col.key] ?? ""}</td>`).join("");
+        return `<tr>${tds}</tr>`;
+    });
+
+    if (data.totals_row) {
+        const totalsCells = data.columns.map((col) => `<td><strong>${data.totals_row[col.key] ?? ""}</strong></td>`).join("");
+        rows.push(`<tr class="table-secondary">${totalsCells}</tr>`);
+    }
+
+    reportTable.querySelector("tbody").innerHTML = rows.join("");
+}
+
+showBtn.addEventListener("click", async () => {
+    hideError();
+    const reportType = document.querySelector('input[name="reportType"]:checked')?.value;
+    const month = document.getElementById("monthInput").value;
+    if (!reportType || !month) {
+        showError("Выберите тип отчета и месяц.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/reports?report_type=${encodeURIComponent(reportType)}&month=${encodeURIComponent(month)}`);
+        const data = await response.json();
+        if (!response.ok) {
+            showError(data.error || "Не удалось загрузить отчет.");
+            return;
+        }
+        if (data.error_message) {
+            showError(data.error_message);
+        }
+        tableTitle.textContent = `${data.report_label} — ${data.month_label}`;
+        displayTable(data);
+        tableContainer.classList.remove("d-none");
+        exportBtn.disabled = false;
+        currentReportType = reportType;
+        currentMonth = month;
+    } catch (error) {
+        showError("Ошибка сети. Попробуйте снова.");
+    }
+});
+
+exportBtn.addEventListener("click", () => {
+    if (!currentReportType || !currentMonth) return;
+    window.location.href = `/api/export-report?report_type=${encodeURIComponent(currentReportType)}&month=${encodeURIComponent(currentMonth)}`;
+});
+</script>
+{% endblock %}

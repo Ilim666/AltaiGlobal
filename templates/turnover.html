@@ -22,21 +22,16 @@
             <div class="row g-2 align-items-end">
                 <div class="col-12 col-md-3">
                     <label class="form-label mb-1">С даты</label>
-                    <input type="date" name="start_date" class="form-control" value="{{ start_date or '' }}">
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date or '' }}" readonly>
                 </div>
                 <div class="col-12 col-md-3">
                     <label class="form-label mb-1">По дату</label>
-                    <input type="date" name="end_date" class="form-control" value="{{ end_date or '' }}">
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date or '' }}" readonly>
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label mb-1">Поиск</label>
-                    <input type="text" name="q" class="form-control" placeholder="Дата или заметка…" value="{{ q or '' }}">
-                </div>
-                <div class="col-12 col-md-2 d-grid gap-2">
-                    <button class="btn btn-dark" type="submit">🔍 Показать</button>
-                    {% if start_date or end_date or q %}
-                    <a href="/turnover" class="btn btn-outline-secondary">Сбросить</a>
-                    {% endif %}
+                <div class="col-12 col-md-6">
+                    <div class="alert alert-secondary mb-0 py-2">
+                        Отображается только текущий месяц.
+                    </div>
                 </div>
             </div>
         </div>

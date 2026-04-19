@@ -1,10 +1,13 @@
 import re
 import os
+import secrets
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
+from functools import wraps
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy import case, func, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
@@ -12,6 +15,7 @@ from sqlalchemy.orm import joinedload
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 db = SQLAlchemy(app)
 
 
@@ -27,6 +31,14 @@ app.jinja_env.filters["fmt_phone"] = fmt_phone
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="operator")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
 
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -84,6 +96,30 @@ class Payment(db.Model):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_id" not in session or session.get("role") != "admin":
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def verify_user_password(user, password):
+    if not user.password:
+        return False
+    return check_password_hash(user.password, password)
+
 
 def validate_phone(phone):
     digits = re.sub(r"\D", "", phone)
@@ -152,18 +188,57 @@ def _remaining_goods_by_day(days):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if "user_id" in session:
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        csrf_token = request.form.get("csrf_token", "")
+        if not csrf_token or not secrets.compare_digest(csrf_token, session.get("csrf_token", "")):
+            return render_template("login.html", error="Сессия истекла. Повторите вход.")
+
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+
+        user = User.query.filter_by(username=username).first()
+        if user and verify_user_password(user, password):
+            session["user_id"] = user.id
+            session["username"] = user.username
+            session["role"] = user.role
+            session.pop("csrf_token", None)
+            return redirect(url_for("index"))
+
+        error = "Неверное имя пользователя или пароль"
+        return render_template("login.html", error=error)
+
+    session["csrf_token"] = secrets.token_urlsafe(32)
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/")
+@login_required
 def index():
-    return redirect(url_for("clients"))
+    if session.get("role") == "admin":
+        return redirect(url_for("clients"))
+    return redirect(url_for("sales"))
 
 
 @app.route("/clients")
+@admin_required
 def clients():
     all_clients = Client.query.order_by(Client.id.desc()).all()
     return render_template("clients.html", clients=all_clients)
 
 
 @app.route("/add-client", methods=["GET", "POST"])
+@admin_required
 def add_client():
     errors = {}
     form = {}
@@ -223,6 +298,7 @@ def add_client():
 
 
 @app.route("/client/<int:id>")
+@admin_required
 def client_detail(id):
     client = Client.query.get_or_404(id)
     cars = Car.query.filter_by(client_id=id).order_by(Car.id.desc()).all()
@@ -230,6 +306,7 @@ def client_detail(id):
 
 
 @app.route("/edit-client/<int:id>", methods=["GET", "POST"])
+@admin_required
 def edit_client(id):
     client = Client.query.get_or_404(id)
     errors = {}
@@ -277,6 +354,7 @@ def edit_client(id):
 
 
 @app.route("/delete-client/<int:id>", methods=["POST"])
+@admin_required
 def delete_client(id):
     client = Client.query.get_or_404(id)
     db.session.delete(client)
@@ -285,6 +363,7 @@ def delete_client(id):
 
 
 @app.route("/add-car", methods=["GET", "POST"])
+@admin_required
 def add_car():
     all_clients = Client.query.order_by(Client.fio).all()
     errors = {}
@@ -326,6 +405,7 @@ def add_car():
 
 
 @app.route("/edit-car/<int:id>", methods=["GET", "POST"])
+@admin_required
 def edit_car(id):
     car = Car.query.get_or_404(id)
     errors = {}
@@ -366,6 +446,7 @@ def edit_car(id):
 
 
 @app.route("/cars")
+@admin_required
 def cars():
     q = request.args.get("q", "").strip()
     query = Car.query.options(joinedload(Car.client)).join(Car.client)
@@ -376,6 +457,7 @@ def cars():
 
 
 @app.route("/delete-car/<int:id>", methods=["POST"])
+@admin_required
 def delete_car(id):
     car = Car.query.get_or_404(id)
     client_id = car.client_id
@@ -390,6 +472,7 @@ def delete_car(id):
 # ── Validation API ─────────────────────────────────────────────────────────────
 
 @app.route("/api/check-fio", methods=["POST"])
+@admin_required
 def check_fio():
     payload = request.get_json(silent=True) or {}
     fio = payload.get("fio", "").strip()
@@ -401,6 +484,7 @@ def check_fio():
 
 
 @app.route("/api/check-phone", methods=["POST"])
+@admin_required
 def check_phone():
     payload = request.get_json(silent=True) or {}
     phone = payload.get("phone", "").strip()
@@ -426,6 +510,7 @@ def check_phone():
 
 
 @app.route("/api/check-inn", methods=["POST"])
+@admin_required
 def check_inn():
     payload = request.get_json(silent=True) or {}
     inn = payload.get("inn", "").strip()
@@ -447,6 +532,7 @@ def check_inn():
 
 
 @app.route("/api/check-car-number", methods=["POST"])
+@admin_required
 def check_car_number():
     payload = request.get_json(silent=True) or {}
     car_number = payload.get("car_number", "").strip()
@@ -467,6 +553,7 @@ def check_car_number():
 # ── Sales ─────────────────────────────────────────────────────────────────────
 
 @app.route("/api/car-search")
+@login_required
 def api_car_search():
     q = request.args.get("q", "").strip()
     if not q:
@@ -484,6 +571,7 @@ def api_car_search():
 
 
 @app.route("/sales", methods=["GET", "POST"])
+@login_required
 def sales():
     errors = {}
     form = {}
@@ -571,6 +659,7 @@ def sales():
 
 
 @app.route("/sales-journal")
+@login_required
 def sales_journal():
     q = request.args.get("q", "").strip()
     query = (
@@ -591,6 +680,7 @@ def sales_journal():
 
 
 @app.route("/debts-journal")
+@login_required
 def debts_journal():
     q = request.args.get("q", "").strip()
     client_id = request.args.get("client_id", "").strip()
@@ -618,6 +708,7 @@ def debts_journal():
 
 
 @app.route("/debts-by-client")
+@admin_required
 def debts_by_client():
     q = request.args.get("q", "").strip()
     debt_sales = (
@@ -664,6 +755,7 @@ def debts_by_client():
 
 
 @app.route("/pay-debt/<int:sale_id>", methods=["POST"])
+@login_required
 def pay_debt(sale_id):
     sale = Sale.query.options(joinedload(Sale.car).joinedload(Car.client)).get_or_404(sale_id)
     amount_str = request.form.get("amount", "").strip()
@@ -699,6 +791,7 @@ def pay_debt(sale_id):
 
 
 @app.route("/payments")
+@login_required
 def payments():
     q = request.args.get("q", "").strip()
     query = (
@@ -713,6 +806,7 @@ def payments():
 
 
 @app.route("/cash")
+@login_required
 def cash():
     all_payments = Payment.query.order_by(Payment.created_at.desc()).all()
 
@@ -753,6 +847,7 @@ def cash():
 
 
 @app.route("/turnover")
+@login_required
 def turnover():
     start_date = _parse_iso_date(request.args.get("start_date"))
     end_date = _parse_iso_date(request.args.get("end_date"))
@@ -840,4 +935,30 @@ def turnover():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+
+        legacy_users = User.query.all()
+        for legacy_user in legacy_users:
+            if not (legacy_user.password or "").startswith(("pbkdf2:", "scrypt:")):
+                legacy_user.password = generate_password_hash(legacy_user.password or "")
+
+        debug_mode = os.getenv("FLASK_DEBUG", "False") == "True"
+        admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD")
+        operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD")
+
+        if debug_mode:
+            admin_password = admin_password or "admin123"
+            operator_password = operator_password or "operator123"
+
+        if not User.query.filter_by(username="admin").first():
+            if admin_password:
+                admin = User(username="admin", password=generate_password_hash(admin_password), role="admin")
+                db.session.add(admin)
+
+        if not User.query.filter_by(username="operator").first():
+            if operator_password:
+                operator = User(username="operator", password=generate_password_hash(operator_password), role="operator")
+                db.session.add(operator)
+
+        db.session.commit()
+
     app.run(debug=os.getenv("FLASK_DEBUG", "False") == "True")

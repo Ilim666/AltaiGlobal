@@ -72,13 +72,15 @@
             </div>
         </div>
         <nav class="nav flex-column">
+            <span class="nav-section-label">Клиенты</span>
+            <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">👥 Список клиентов</a>
             {% if session.get("role") == "admin" %}
-                <span class="nav-section-label">Клиенты</span>
-                <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">👥 Список клиентов</a>
                 <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">➕ Добавить клиента</a>
+            {% endif %}
 
-                <span class="nav-section-label">Машины</span>
-                <a class="nav-link {% if request.path == '/cars' %}active{% endif %}" href="/cars">🚗 Список машин</a>
+            <span class="nav-section-label">Машины</span>
+            <a class="nav-link {% if request.path == '/cars' %}active{% endif %}" href="/cars">🚗 Список машин</a>
+            {% if session.get("role") == "admin" %}
                 <a class="nav-link {% if request.path == '/add-car' %}active{% endif %}" href="/add-car">🚙 Добавить машину</a>
             {% endif %}
 

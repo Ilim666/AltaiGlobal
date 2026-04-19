@@ -79,7 +79,11 @@
                     <td>{{ "%.2f"|format(payments) }}</td>
                     <td><span class="text-danger fw-semibold">{{ "%.2f"|format(debts) }}</span></td>
                     <td>{{ "%.2f"|format(avg_price) }}</td>
-                    <td data-stock-cell data-car-id="{{ row.car_id if row.car_id is defined else '' }}">
+                    <td
+                        data-stock-cell
+                        data-car-id="{{ row.car_id if row.car_id is defined else '' }}"
+                        data-row-liters="{{ liters }}"
+                    >
                         {% if stock is number %}
                             <span data-stock-value>{{ "%.2f"|format(stock|float) }}</span>
                         {% else %}
@@ -135,7 +139,7 @@
                 <div id="increaseStockCarInfo" class="text-muted small mb-2"></div>
                 <div class="mb-1">
                     <label for="stockLitersInput" class="form-label">Литры</label>
-                    <input id="stockLitersInput" type="number" step="0.01" min="0.01" class="form-control" value="5000">
+                    <input id="stockLitersInput" type="number" step="0.01" min="0.01" class="form-control">
                 </div>
             </div>
             <div class="modal-footer">
@@ -150,6 +154,7 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    const DEFAULT_INCREASE_LITERS = 5000;
     const applyBtn = document.getElementById("applyIncreaseStockBtn");
     const stockButtons = document.querySelectorAll(".increase-stock-btn");
     const litersInput = document.getElementById("stockLitersInput");
@@ -159,6 +164,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const modalEl = document.getElementById("increaseStockModal");
     const modal = window.bootstrap ? window.bootstrap.Modal.getOrCreateInstance(modalEl) : null;
     let selectedCarId = null;
+    let successTimer = null;
 
     function showError(message) {
         errorBox.textContent = message;
@@ -174,16 +180,24 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!successBox) return;
         successBox.textContent = message;
         successBox.classList.remove("d-none");
+        if (successTimer) {
+            clearTimeout(successTimer);
+        }
+        successTimer = setTimeout(() => {
+            successBox.classList.add("d-none");
+            successBox.textContent = "";
+        }, 3000);
     }
 
     stockButtons.forEach((button) => {
         button.addEventListener("click", function () {
             hideError();
-            selectedCarId = Number(button.dataset.carId);
+            const parsedCarId = Number(button.dataset.carId);
+            selectedCarId = Number.isFinite(parsedCarId) && parsedCarId > 0 ? parsedCarId : null;
             if (carInfo) {
                 carInfo.textContent = button.dataset.carLabel ? `Машина: ${button.dataset.carLabel}` : "";
             }
-            litersInput.value = "5000";
+            litersInput.value = String(DEFAULT_INCREASE_LITERS);
             litersInput.focus();
         });
     });
@@ -221,12 +235,15 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            document.querySelectorAll(`[data-stock-cell][data-car-id="${selectedCarId}"]`).forEach((cell) => {
+            document.querySelectorAll("[data-stock-cell]").forEach((cell) => {
+                const cellCarId = Number(cell.dataset.carId);
+                if (!Number.isFinite(cellCarId) || cellCarId !== selectedCarId) return;
                 const valueEl = cell.querySelector("[data-stock-value]");
                 if (!valueEl) return;
-                const currentValue = parseFloat((valueEl.textContent || "").replace(",", "."));
-                if (!Number.isFinite(currentValue)) return;
-                valueEl.textContent = (currentValue + liters).toFixed(2);
+                const rowLiters = parseFloat(cell.dataset.rowLiters || "");
+                const currentStock = parseFloat(data.stock);
+                if (!Number.isFinite(rowLiters) || !Number.isFinite(currentStock)) return;
+                valueEl.textContent = (currentStock - rowLiters).toFixed(2);
             });
 
             showSuccess("Остаток успешно увеличен.");

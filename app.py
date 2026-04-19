@@ -87,6 +87,20 @@ class Receipt(db.Model):
     notes = db.Column(db.Text, nullable=True)
 
 
+class DailyStock(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    stock_date = db.Column(db.Date, nullable=False, unique=True)
+    current_stock = db.Column(db.Float, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class StockHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    stock_date = db.Column(db.Date, nullable=False)
+    added_liters = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 PAYMENT_TYPES = ["продажа", "долг"]
 DEBT_PAYMENT_TYPE = "долг"
 
@@ -226,6 +240,33 @@ def _ensure_car_stock_column():
     else:
         db.session.execute(text("ALTER TABLE cars ADD COLUMN stock FLOAT DEFAULT 0"))
     db.session.commit()
+
+
+def _ensure_daily_stock_tables():
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    if "daily_stock" not in table_names:
+        DailyStock.__table__.create(bind=db.engine, checkfirst=True)
+    if "stock_history" not in table_names:
+        StockHistory.__table__.create(bind=db.engine, checkfirst=True)
+
+
+def _get_or_create_daily_stock(stock_date):
+    daily_stock = DailyStock.query.filter_by(stock_date=stock_date).first()
+    if daily_stock:
+        return daily_stock
+
+    previous_day_stock = (
+        DailyStock.query
+        .filter(DailyStock.stock_date < stock_date)
+        .order_by(DailyStock.stock_date.desc())
+        .first()
+    )
+    base_stock = float(previous_day_stock.current_stock or 0) if previous_day_stock else 0.0
+    daily_stock = DailyStock(stock_date=stock_date, current_stock=base_stock)
+    db.session.add(daily_stock)
+    db.session.flush()
+    return daily_stock
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -710,6 +751,42 @@ def increase_stock():
     return jsonify({"ok": True, "car_id": car.id, "stock": car.stock})
 
 
+@app.route("/api/set-daily-stock", methods=["POST"])
+@admin_required
+def set_daily_stock():
+    _ensure_daily_stock_tables()
+
+    payload = request.get_json(silent=True) or {}
+    liters_raw = payload.get("liters")
+
+    try:
+        liters = float(liters_raw)
+        if liters <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Количество литров должно быть больше 0."}), 400
+
+    today = datetime.now(timezone.utc).date()
+    daily_stock = _get_or_create_daily_stock(today)
+    daily_stock.current_stock = round(float(daily_stock.current_stock) + liters, 2)
+    db.session.add(StockHistory(stock_date=today, added_liters=liters))
+    db.session.commit()
+
+    app.logger.info(
+        "Daily stock increased: stock_date=%s, liters=%s, user_id=%s",
+        today.isoformat(),
+        liters,
+        session.get("user_id"),
+    )
+
+    return jsonify({
+        "ok": True,
+        "stock_date": today.isoformat(),
+        "current_stock": daily_stock.current_stock,
+        "added_liters": liters,
+    })
+
+
 # ── Sales ─────────────────────────────────────────────────────────────────────
 
 @app.route("/api/car-search")
@@ -884,6 +961,10 @@ def sales():
                     payment_method=form["payment_method"],
                 )
                 db.session.add(payment)
+            _ensure_daily_stock_tables()
+            sale_date = datetime.now(timezone.utc).date()
+            daily_stock = _get_or_create_daily_stock(sale_date)
+            daily_stock.current_stock = round(float(daily_stock.current_stock) - liters, 2)
             db.session.commit()
             return redirect(url_for("sales_journal"))
 
@@ -1090,7 +1171,7 @@ def cash():
 @app.route("/turnover")
 @admin_required
 def turnover():
-    _ensure_car_stock_column()
+    _ensure_daily_stock_tables()
     start_date = _parse_iso_date(request.args.get("start_date"))
     end_date = _parse_iso_date(request.args.get("end_date"))
 
@@ -1099,15 +1180,11 @@ def turnover():
 
     sales_query = db.session.query(
         sale_day.label("sale_date"),
-        Sale.car_id.label("car_id"),
-        Car.number.label("car_number"),
-        Client.fio.label("client_fio"),
-        func.coalesce(Car.stock, 0).label("stock"),
         func.coalesce(func.sum(Sale.liters), 0).label("liters"),
         func.coalesce(func.sum(Sale.total), 0).label("amount"),
         func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, 0), else_=func.coalesce(Sale.payment_amount, 0))), 0).label("payments"),
         func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, Sale.total), else_=Sale.total - func.coalesce(Sale.payment_amount, 0))), 0).label("debts"),
-    ).join(Car, Car.id == Sale.car_id).join(Client, Client.id == Car.client_id)
+    )
 
     if start_date:
         min_dt = datetime.combine(start_date, time.min)
@@ -1130,15 +1207,12 @@ def turnover():
         grouped_sales = (
             sales_query.group_by(
                 sale_day,
-                Sale.car_id,
-                Car.number,
-                Client.fio,
-                Car.stock,
             )
-            .order_by(sale_day.desc(), Car.number.asc())
+            .order_by(sale_day.desc())
             .all()
         )
 
+        sales_by_day = {}
         for row in grouped_sales:
             row_date = _coerce_day(row.sale_date)
             if not row_date:
@@ -1148,25 +1222,64 @@ def turnover():
             payments = float(row.payments or 0)
             debts = float(row.debts or 0)
             average_price = amount / liters if liters else 0.0
-            remaining_goods = float(row.stock or 0) - liters
 
             totals["liters"] += liters
             totals["amount"] += amount
             totals["payments"] += payments
             totals["debts"] += debts
 
+            sales_by_day[row_date] = {
+                "liters": liters,
+                "amount": amount,
+                "payments": payments,
+                "debts": debts,
+                "average_price": average_price,
+            }
+
+        history_query = db.session.query(
+            StockHistory.stock_date.label("stock_date"),
+            func.coalesce(func.sum(StockHistory.added_liters), 0).label("added_liters"),
+        )
+        stocks_query = db.session.query(
+            DailyStock.stock_date.label("stock_date"),
+            DailyStock.current_stock.label("current_stock"),
+        )
+
+        if start_date:
+            history_query = history_query.filter(StockHistory.stock_date >= start_date)
+            stocks_query = stocks_query.filter(DailyStock.stock_date >= start_date)
+        if end_date:
+            history_query = history_query.filter(StockHistory.stock_date <= end_date)
+            stocks_query = stocks_query.filter(DailyStock.stock_date <= end_date)
+
+        additions_by_day = {
+            _coerce_day(row.stock_date): float(row.added_liters or 0)
+            for row in history_query.group_by(StockHistory.stock_date).all()
+            if _coerce_day(row.stock_date)
+        }
+        stock_by_day = {
+            _coerce_day(row.stock_date): float(row.current_stock or 0)
+            for row in stocks_query.all()
+            if _coerce_day(row.stock_date)
+        }
+
+        all_days = set(sales_by_day) | set(additions_by_day) | set(stock_by_day)
+        for row_date in sorted(all_days, reverse=True):
+            daily_sales = sales_by_day.get(
+                row_date,
+                {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0, "average_price": 0.0},
+            )
             rows_data.append(
                 {
                     "date": row_date,
                     "date_label": row_date.strftime("%d.%m.%Y"),
-                    "liters": liters,
-                    "amount": amount,
-                    "payments": payments,
-                    "debts": debts,
-                    "average_price": average_price,
-                    "remaining_goods": remaining_goods,
-                    "car_id": row.car_id,
-                    "car_label": f"{row.car_number} — {row.client_fio}",
+                    "liters": daily_sales["liters"],
+                    "amount": daily_sales["amount"],
+                    "payments": daily_sales["payments"],
+                    "debts": daily_sales["debts"],
+                    "average_price": daily_sales["average_price"],
+                    "remaining_goods": stock_by_day.get(row_date, 0.0),
+                    "added_liters": additions_by_day.get(row_date, 0.0),
                 }
             )
 
@@ -1194,6 +1307,7 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         _ensure_car_stock_column()
+        _ensure_daily_stock_tables()
 
         legacy_users = User.query.all()
         for legacy_user in legacy_users:

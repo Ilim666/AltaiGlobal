@@ -3,10 +3,8 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">📊 Оборот</h2>
-    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#increaseStockModal">
-        ➕ Увеличить остаток
-    </button>
 </div>
+<div id="increaseStockSuccess" class="alert alert-success d-none" role="alert"></div>
 
 <form method="get" action="/turnover" class="mb-4">
     <div class="card shadow-sm">
@@ -44,22 +42,13 @@
             <thead class="table-dark">
                 <tr>
                     <th>Дата</th>
+                    <th>Машина</th>
                     <th>Литр</th>
                     <th>Сумма</th>
                     <th>Оплаты</th>
                     <th>Долги</th>
                     <th>Средняя цена</th>
-                    <th>
-                        Остаток товара
-                        <button
-                            type="button"
-                            class="btn btn-sm btn-outline-light ms-2"
-                            data-bs-toggle="modal"
-                            data-bs-target="#increaseStockModal"
-                        >
-                            ➕ Увеличить
-                        </button>
-                    </th>
+                    <th>Остаток товара</th>
                 </tr>
             </thead>
             <tbody>
@@ -84,16 +73,29 @@
                             —
                         {% endif %}
                     </td>
+                    <td>{{ row.car_label if row.car_label is defined else "—" }}</td>
                     <td>{{ "%.2f"|format(liters) }}</td>
                     <td>{{ "%.2f"|format(amount) }}</td>
                     <td>{{ "%.2f"|format(payments) }}</td>
                     <td><span class="text-danger fw-semibold">{{ "%.2f"|format(debts) }}</span></td>
                     <td>{{ "%.2f"|format(avg_price) }}</td>
-                    <td>
+                    <td data-stock-cell data-car-id="{{ row.car_id if row.car_id is defined else '' }}">
                         {% if stock is number %}
-                            {{ "%.2f"|format(stock|float) }}
+                            <span data-stock-value>{{ "%.2f"|format(stock|float) }}</span>
                         {% else %}
-                            {{ stock }}
+                            <span data-stock-value>{{ stock }}</span>
+                        {% endif %}
+                        {% if session.get("role") == "admin" and row.car_id is defined %}
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-success ms-2 increase-stock-btn"
+                            data-bs-toggle="modal"
+                            data-bs-target="#increaseStockModal"
+                            data-car-id="{{ row.car_id }}"
+                            data-car-label="{{ row.car_label if row.car_label is defined else '' }}"
+                        >
+                            ➕ Увеличить
+                        </button>
                         {% endif %}
                     </td>
                 </tr>
@@ -102,6 +104,7 @@
             <tfoot>
                 <tr class="table-light fw-bold">
                     <td>ИТОГО</td>
+                    <td>—</td>
                     <td>{{ "%.2f"|format(ns.total_liters) }}</td>
                     <td>{{ "%.2f"|format(ns.total_amount) }}</td>
                     <td>{{ "%.2f"|format(ns.total_payments) }}</td>
@@ -129,18 +132,10 @@
             </div>
             <div class="modal-body">
                 <div id="increaseStockError" class="alert alert-danger d-none" role="alert"></div>
-                <div class="mb-3">
-                    <label for="stockCarSelect" class="form-label">Машина</label>
-                    <select id="stockCarSelect" class="form-select">
-                        <option value="">Выберите машину</option>
-                        {% for car in cars %}
-                        <option value="{{ car.id }}">{{ car.number }} — {{ car.client.fio }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                <div id="increaseStockCarInfo" class="text-muted small mb-2"></div>
                 <div class="mb-1">
                     <label for="stockLitersInput" class="form-label">Литры</label>
-                    <input id="stockLitersInput" type="number" step="0.01" min="0.01" class="form-control" placeholder="Например, 100">
+                    <input id="stockLitersInput" type="number" step="0.01" min="0.01" class="form-control" value="5000">
                 </div>
             </div>
             <div class="modal-footer">
@@ -156,11 +151,14 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const applyBtn = document.getElementById("applyIncreaseStockBtn");
-    const carSelect = document.getElementById("stockCarSelect");
+    const stockButtons = document.querySelectorAll(".increase-stock-btn");
     const litersInput = document.getElementById("stockLitersInput");
+    const carInfo = document.getElementById("increaseStockCarInfo");
     const errorBox = document.getElementById("increaseStockError");
+    const successBox = document.getElementById("increaseStockSuccess");
     const modalEl = document.getElementById("increaseStockModal");
     const modal = window.bootstrap ? window.bootstrap.Modal.getOrCreateInstance(modalEl) : null;
+    let selectedCarId = null;
 
     function showError(message) {
         errorBox.textContent = message;
@@ -172,13 +170,37 @@ document.addEventListener("DOMContentLoaded", function () {
         errorBox.classList.add("d-none");
     }
 
+    function showSuccess(message) {
+        if (!successBox) return;
+        successBox.textContent = message;
+        successBox.classList.remove("d-none");
+    }
+
+    stockButtons.forEach((button) => {
+        button.addEventListener("click", function () {
+            hideError();
+            selectedCarId = Number(button.dataset.carId);
+            if (carInfo) {
+                carInfo.textContent = button.dataset.carLabel ? `Машина: ${button.dataset.carLabel}` : "";
+            }
+            litersInput.value = "5000";
+            litersInput.focus();
+        });
+    });
+
+    if (modalEl) {
+        modalEl.addEventListener("hidden.bs.modal", function () {
+            selectedCarId = null;
+            hideError();
+        });
+    }
+
     applyBtn.addEventListener("click", async function () {
         hideError();
-        const carId = carSelect.value;
         const liters = parseFloat(litersInput.value);
 
-        if (!carId) {
-            showError("Выберите машину.");
+        if (!selectedCarId) {
+            showError("Не выбрана машина для увеличения остатка.");
             return;
         }
         if (!Number.isFinite(liters) || liters <= 0) {
@@ -191,17 +213,26 @@ document.addEventListener("DOMContentLoaded", function () {
             const response = await fetch("/api/increase-stock", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ car_id: Number(carId), liters: liters })
+                body: JSON.stringify({ car_id: selectedCarId, liters: liters })
             });
             const data = await response.json();
             if (!response.ok || !data.ok) {
                 showError(data.error || "Не удалось увеличить остаток.");
                 return;
             }
+
+            document.querySelectorAll(`[data-stock-cell][data-car-id="${selectedCarId}"]`).forEach((cell) => {
+                const valueEl = cell.querySelector("[data-stock-value]");
+                if (!valueEl) return;
+                const currentValue = parseFloat((valueEl.textContent || "").replace(",", "."));
+                if (!Number.isFinite(currentValue)) return;
+                valueEl.textContent = (currentValue + liters).toFixed(2);
+            });
+
+            showSuccess("Остаток успешно увеличен.");
             if (modal) {
                 modal.hide();
             }
-            window.location.reload();
         } catch (e) {
             showError("Ошибка сети. Попробуйте снова.");
         } finally {

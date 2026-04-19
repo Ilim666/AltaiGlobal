@@ -1099,11 +1099,15 @@ def turnover():
 
     sales_query = db.session.query(
         sale_day.label("sale_date"),
+        Sale.car_id.label("car_id"),
+        Car.number.label("car_number"),
+        Client.fio.label("client_fio"),
+        func.coalesce(Car.stock, 0).label("stock"),
         func.coalesce(func.sum(Sale.liters), 0).label("liters"),
         func.coalesce(func.sum(Sale.total), 0).label("amount"),
         func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, 0), else_=func.coalesce(Sale.payment_amount, 0))), 0).label("payments"),
         func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, Sale.total), else_=Sale.total - func.coalesce(Sale.payment_amount, 0))), 0).label("debts"),
-    )
+    ).join(Car, Car.id == Sale.car_id).join(Client, Client.id == Car.client_id)
 
     if start_date:
         min_dt = datetime.combine(start_date, time.min)
@@ -1123,31 +1127,28 @@ def turnover():
     error_message = None
 
     try:
-        grouped_sales = sales_query.group_by(sale_day).all()
-        total_stock = float(db.session.query(func.coalesce(func.sum(Car.stock), 0)).scalar() or 0)
+        grouped_sales = (
+            sales_query.group_by(
+                sale_day,
+                Sale.car_id,
+                Car.number,
+                Client.fio,
+                Car.stock,
+            )
+            .order_by(sale_day.desc(), Car.number.asc())
+            .all()
+        )
 
-        sales_map = {}
         for row in grouped_sales:
             row_date = _coerce_day(row.sale_date)
             if not row_date:
                 continue
-            sales_map[row_date] = {
-                "liters": float(row.liters or 0),
-                "amount": float(row.amount or 0),
-                "payments": float(row.payments or 0),
-                "debts": float(row.debts or 0),
-            }
-
-        all_days = sorted(set(sales_map.keys()), reverse=True)
-
-        for row_date in all_days:
-            sales_row = sales_map.get(row_date, {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0})
-            liters = sales_row["liters"]
-            amount = sales_row["amount"]
-            payments = sales_row["payments"]
-            debts = sales_row["debts"]
+            liters = float(row.liters or 0)
+            amount = float(row.amount or 0)
+            payments = float(row.payments or 0)
+            debts = float(row.debts or 0)
             average_price = amount / liters if liters else 0.0
-            remaining_goods = total_stock - liters
+            remaining_goods = float(row.stock or 0) - liters
 
             totals["liters"] += liters
             totals["amount"] += amount
@@ -1164,6 +1165,8 @@ def turnover():
                     "debts": debts,
                     "average_price": average_price,
                     "remaining_goods": remaining_goods,
+                    "car_id": row.car_id,
+                    "car_label": f"{row.car_number} — {row.client_fio}",
                 }
             )
 
@@ -1184,7 +1187,6 @@ def turnover():
         error_message=error_message,
         start_date=start_date.isoformat() if start_date else "",
         end_date=end_date.isoformat() if end_date else "",
-        cars=Car.query.options(joinedload(Car.client)).order_by(Car.number.asc()).all(),
     )
 
 

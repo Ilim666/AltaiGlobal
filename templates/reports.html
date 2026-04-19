@@ -111,8 +111,8 @@ showBtn.addEventListener("click", async () => {
             showError(data.error || "Не удалось загрузить отчет.");
             return;
         }
-        if (data.error_message) {
-            showError(data.error_message);
+        if (data.error) {
+            showError(data.error);
             tableContainer.classList.add("d-none");
             exportBtn.disabled = true;
             currentReportType = null;

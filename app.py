@@ -1579,7 +1579,7 @@ def api_reports():
     if payload.get("totals_row"):
         response["totals_row"] = payload["totals_row"]
     if payload.get("error_message"):
-        response["error_message"] = payload["error_message"]
+        response["error"] = payload["error_message"]
     return jsonify(response)
 
 

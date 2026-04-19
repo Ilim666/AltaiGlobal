@@ -146,7 +146,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     carNumberInput.addEventListener('input', validateCarNumber);
-    selectEl.addEventListener('change', validateCarNumber);
     form.addEventListener('submit', function (e) {
         if (hasCarNumberError) {
             e.preventDefault();

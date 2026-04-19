@@ -32,6 +32,7 @@
                     <th>Сумма</th>
                     <th>Сумма оплаты</th>
                     <th>Способ оплаты</th>
+                    <th>Оператор</th>
                     <th>Остаток суммы</th>
                     <th>Примечание</th>
                 </tr>
@@ -63,6 +64,7 @@
                         <span class="badge bg-secondary">{{ s.payment_method }}</span>
                     {% endif %}
                 </td>
+                <td>{{ s.created_by_user.username if s.created_by_user else '—' }}</td>
                 <td>
                     {{ "%.2f"|format((s.total - (s.payment_amount or 0))|round(2)|float) }}
                 </td>

@@ -3,6 +3,7 @@ import os
 import secrets
 from io import BytesIO
 from collections import defaultdict
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import date, datetime, time, timedelta, timezone
 from functools import wraps
 
@@ -49,8 +50,10 @@ class Client(db.Model):
     fio = db.Column(db.String(100), unique=True, nullable=False)
     phone = db.Column(db.String(10), nullable=False)
     inn = db.Column(db.String(14), nullable=False)
+    is_deleted = db.Column(db.Boolean, default=False, server_default=text("0"), nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    cars = db.relationship("Car", backref="client", lazy=True, cascade="all, delete-orphan")
+    cars = db.relationship("Car", backref="client", lazy=True)
 
 
 class Car(db.Model):
@@ -60,10 +63,12 @@ class Car(db.Model):
     brand = db.Column(db.String(100), nullable=False)
     color = db.Column(db.String(50), nullable=False)
     note = db.Column(db.Text, nullable=True)
-    stock = db.Column(db.Float, default=0)
+    stock = db.Column(db.Numeric(10, 2), default=0)
+    is_deleted = db.Column(db.Boolean, default=False, server_default=text("0"), nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    sales = db.relationship("Sale", backref="car", lazy=True, cascade="all, delete-orphan")
-    receipts = db.relationship("Receipt", backref="car", lazy=True, cascade="all, delete-orphan")
+    sales = db.relationship("Sale", backref="car", lazy=True)
+    receipts = db.relationship("Receipt", backref="car", lazy=True)
 
 
 PAYMENT_METHODS = ["наличка", "безнал", "доллар", "долг"]
@@ -73,10 +78,10 @@ class Sale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     car_id = db.Column(db.Integer, db.ForeignKey("car.id"), nullable=False)
     liters = db.Column(db.Float, nullable=False)
-    price_per_liter = db.Column(db.Float, nullable=False)
-    total = db.Column(db.Float, nullable=False)
+    price_per_liter = db.Column(db.Numeric(10, 2), nullable=False)
+    total = db.Column(db.Numeric(10, 2), nullable=False)
     payment_method = db.Column(db.String(20), nullable=False)
-    payment_amount = db.Column(db.Float, nullable=True)
+    payment_amount = db.Column(db.Numeric(10, 2), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     note = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -88,7 +93,7 @@ class Receipt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     car_id = db.Column(db.Integer, db.ForeignKey("car.id"), nullable=False)
     liters = db.Column(db.Float, nullable=False)
-    amount = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     notes = db.Column(db.Text, nullable=True)
 
@@ -96,14 +101,14 @@ class Receipt(db.Model):
 class DailyStock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     stock_date = db.Column(db.Date, nullable=False, unique=True)
-    current_stock = db.Column(db.Float, default=0)
+    current_stock = db.Column(db.Numeric(10, 2), default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class StockHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     stock_date = db.Column(db.Date, nullable=False)
-    added_liters = db.Column(db.Float, nullable=False)
+    added_liters = db.Column(db.Numeric(10, 2), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
@@ -122,7 +127,7 @@ class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False)
     sale_id = db.Column(db.Integer, db.ForeignKey("sale.id"), nullable=True)
-    amount = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
     payment_type = db.Column(
         db.String(20),
         db.CheckConstraint("payment_type IN ('продажа', 'долг')"),
@@ -228,6 +233,12 @@ def _format_number(value):
     return round(float(value or 0), 2)
 
 
+def _to_decimal_2(value):
+    if value is None:
+        return Decimal("0.00")
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def _month_datetime_bounds(start_date, end_date):
     return datetime.combine(start_date, time.min), datetime.combine(end_date + timedelta(days=1), time.min)
 
@@ -305,6 +316,26 @@ def _ensure_daily_stock_tables():
         StockHistory.__table__.create(bind=db.engine, checkfirst=True)
 
 
+def _ensure_client_car_soft_delete():
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+
+    for table_name in ["client", "car"]:
+        if table_name in table_names:
+            columns = {column["name"] for column in inspector.get_columns(table_name)}
+            if "is_deleted" not in columns:
+                if table_name == "client":
+                    db.session.execute(text("ALTER TABLE client ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
+                else:
+                    db.session.execute(text("ALTER TABLE car ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
+            if "deleted_at" not in columns:
+                if table_name == "client":
+                    db.session.execute(text("ALTER TABLE client ADD COLUMN deleted_at DATETIME"))
+                else:
+                    db.session.execute(text("ALTER TABLE car ADD COLUMN deleted_at DATETIME"))
+    db.session.commit()
+
+
 def _ensure_sale_payment_user_columns():
     inspector = inspect(db.engine)
     table_names = set(inspector.get_table_names())
@@ -331,7 +362,7 @@ def _get_or_create_daily_stock(stock_date):
         .order_by(DailyStock.stock_date.desc())
         .first()
     )
-    base_stock = float(previous_day_stock.current_stock or 0) if previous_day_stock else 0.0
+    base_stock = _to_decimal_2(previous_day_stock.current_stock) if previous_day_stock else Decimal("0.00")
     daily_stock = DailyStock(stock_date=stock_date, current_stock=base_stock)
     db.session.add(daily_stock)
     db.session.flush()
@@ -385,7 +416,7 @@ def index():
 @app.route("/clients")
 @login_required
 def clients():
-    all_clients = Client.query.order_by(Client.id.desc()).all()
+    all_clients = Client.query.filter_by(is_deleted=False).order_by(Client.id.desc()).all()
     return render_template("clients.html", clients=all_clients)
 
 
@@ -485,24 +516,24 @@ def add_client():
 
         if not form["fio"]:
             errors["fio"] = "ФИО обязательно."
-        elif Client.query.filter_by(fio=form["fio"]).first():
+        elif Client.query.filter_by(fio=form["fio"], is_deleted=False).first():
             errors["fio"] = "Клиент с таким ФИО уже существует."
 
         phone_digits = validate_phone(form["phone"])
         if phone_digits is None:
             errors["phone"] = "Телефон должен содержать ровно 10 цифр."
-        elif Client.query.filter_by(phone=phone_digits).first():
+        elif Client.query.filter_by(phone=phone_digits, is_deleted=False).first():
             errors["phone"] = "Телефон уже используется."
 
         inn_digits = validate_inn(form["inn"])
         if inn_digits is None:
             errors["inn"] = "ИНН должен содержать ровно 14 цифр."
-        elif Client.query.filter_by(inn=inn_digits).first():
+        elif Client.query.filter_by(inn=inn_digits, is_deleted=False).first():
             errors["inn"] = "ИНН уже используется."
 
         if not form["car_number"]:
             errors["car_number"] = "Номер машины обязателен."
-        elif Car.query.filter_by(number=form["car_number"]).first():
+        elif Car.query.filter_by(number=form["car_number"], is_deleted=False).first():
             errors["car_number"] = "Машина с таким номером уже существует."
 
         if not form["car_brand"]:
@@ -532,15 +563,15 @@ def add_client():
 @app.route("/client/<int:id>")
 @admin_required
 def client_detail(id):
-    client = Client.query.get_or_404(id)
-    cars = Car.query.filter_by(client_id=id).order_by(Car.id.desc()).all()
+    client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
+    cars = Car.query.filter_by(client_id=id, is_deleted=False).order_by(Car.id.desc()).all()
     return render_template("client_detail.html", client=client, cars=cars)
 
 
 @app.route("/edit-client/<int:id>", methods=["GET", "POST"])
 @admin_required
 def edit_client(id):
-    client = Client.query.get_or_404(id)
+    client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
     errors = {}
     form = {
         "fio": client.fio,
@@ -555,7 +586,7 @@ def edit_client(id):
         if not form["fio"]:
             errors["fio"] = "ФИО обязательно."
         else:
-            existing = Client.query.filter_by(fio=form["fio"]).first()
+            existing = Client.query.filter_by(fio=form["fio"], is_deleted=False).first()
             if existing and existing.id != id:
                 errors["fio"] = "Клиент с таким ФИО уже существует."
 
@@ -563,7 +594,7 @@ def edit_client(id):
         if phone_digits is None:
             errors["phone"] = "Телефон должен содержать ровно 10 цифр."
         else:
-            existing_phone = Client.query.filter_by(phone=phone_digits).first()
+            existing_phone = Client.query.filter_by(phone=phone_digits, is_deleted=False).first()
             if existing_phone and existing_phone.id != id:
                 errors["phone"] = "Телефон уже используется."
 
@@ -571,7 +602,7 @@ def edit_client(id):
         if inn_digits is None:
             errors["inn"] = "ИНН должен содержать ровно 14 цифр."
         else:
-            existing_inn = Client.query.filter_by(inn=inn_digits).first()
+            existing_inn = Client.query.filter_by(inn=inn_digits, is_deleted=False).first()
             if existing_inn and existing_inn.id != id:
                 errors["inn"] = "ИНН уже используется."
 
@@ -588,8 +619,13 @@ def edit_client(id):
 @app.route("/delete-client/<int:id>", methods=["POST"])
 @admin_required
 def delete_client(id):
-    client = Client.query.get_or_404(id)
-    db.session.delete(client)
+    client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
+    deleted_at = datetime.now(timezone.utc)
+    client.is_deleted = True
+    client.deleted_at = deleted_at
+    for car in Car.query.filter_by(client_id=client.id, is_deleted=False).all():
+        car.is_deleted = True
+        car.deleted_at = deleted_at
     db.session.commit()
     return redirect(url_for("clients"))
 
@@ -597,7 +633,7 @@ def delete_client(id):
 @app.route("/add-car", methods=["GET", "POST"])
 @admin_required
 def add_car():
-    all_clients = Client.query.order_by(Client.fio).all()
+    all_clients = Client.query.filter_by(is_deleted=False).order_by(Client.fio).all()
     errors = {}
     form = {}
     if request.method == "POST":
@@ -612,7 +648,7 @@ def add_car():
 
         if not form["number"]:
             errors["number"] = "Номер машины обязателен."
-        elif Car.query.filter_by(number=form["number"]).first():
+        elif Car.query.filter_by(number=form["number"], is_deleted=False).first():
             errors["number"] = "Машина с таким номером уже существует."
 
         if not form["brand"]:
@@ -622,16 +658,26 @@ def add_car():
             errors["color"] = "Цвет машины обязателен."
 
         if not errors:
-            car = Car(
-                client_id=int(form["client_id"]),
-                number=form["number"],
-                brand=form["brand"],
-                color=form["color"],
-                note=form["note"] or None,
-            )
-            db.session.add(car)
-            db.session.commit()
-            return redirect(url_for("client_detail", id=car.client_id))
+            try:
+                selected_client_id = int(form["client_id"])
+            except (TypeError, ValueError):
+                selected_client_id = None
+            client = None
+            if selected_client_id:
+                client = Client.query.filter_by(id=selected_client_id, is_deleted=False).first()
+            if not client:
+                errors["client_id"] = "Выберите корректного клиента."
+            else:
+                car = Car(
+                    client_id=client.id,
+                    number=form["number"],
+                    brand=form["brand"],
+                    color=form["color"],
+                    note=form["note"] or None,
+                )
+                db.session.add(car)
+                db.session.commit()
+                return redirect(url_for("client_detail", id=car.client_id))
 
     return render_template("add_car.html", clients=all_clients, errors=errors, form=form)
 
@@ -639,7 +685,7 @@ def add_car():
 @app.route("/edit-car/<int:id>", methods=["GET", "POST"])
 @admin_required
 def edit_car(id):
-    car = Car.query.get_or_404(id)
+    car = Car.query.filter_by(id=id, is_deleted=False).first_or_404()
     errors = {}
     form = {
         "number": car.number,
@@ -656,7 +702,7 @@ def edit_car(id):
         if not form["number"]:
             errors["number"] = "Номер машины обязателен."
         else:
-            existing = Car.query.filter_by(number=form["number"]).first()
+            existing = Car.query.filter_by(number=form["number"], is_deleted=False).first()
             if existing and existing.id != id:
                 errors["number"] = "Машина с таким номером уже существует."
 
@@ -681,7 +727,12 @@ def edit_car(id):
 @login_required
 def cars():
     q = request.args.get("q", "").strip()
-    query = Car.query.options(joinedload(Car.client)).join(Car.client)
+    query = (
+        Car.query.filter_by(is_deleted=False)
+        .options(joinedload(Car.client))
+        .join(Car.client)
+        .filter(Client.is_deleted.is_(False))
+    )
     if q:
         query = query.filter(Client.fio.ilike(f"%{q}%"))
     all_cars = query.order_by(Car.id.desc()).all()
@@ -691,10 +742,11 @@ def cars():
 @app.route("/delete-car/<int:id>", methods=["POST"])
 @admin_required
 def delete_car(id):
-    car = Car.query.get_or_404(id)
+    car = Car.query.filter_by(id=id, is_deleted=False).first_or_404()
     client_id = car.client_id
     next_page = request.form.get("next", "")
-    db.session.delete(car)
+    car.is_deleted = True
+    car.deleted_at = datetime.now(timezone.utc)
     db.session.commit()
     if next_page == "cars":
         return redirect(url_for("cars"))
@@ -711,7 +763,7 @@ def check_fio():
     if not fio:
         return jsonify({"exists": False})
 
-    existing = Client.query.filter_by(fio=fio).first()
+    existing = Client.query.filter_by(fio=fio, is_deleted=False).first()
     return jsonify({"exists": bool(existing)})
 
 
@@ -726,7 +778,7 @@ def check_phone():
 
     exists = False
     if is_valid:
-        query = Client.query.filter_by(phone=digits)
+        query = Client.query.filter_by(phone=digits, is_deleted=False)
         if client_id is not None and client_id != "":
             try:
                 query = query.filter(Client.id != int(client_id))
@@ -752,7 +804,7 @@ def check_inn():
 
     exists = False
     if is_valid:
-        query = Client.query.filter_by(inn=digits)
+        query = Client.query.filter_by(inn=digits, is_deleted=False)
         if client_id is not None and client_id != "":
             try:
                 query = query.filter(Client.id != int(client_id))
@@ -772,7 +824,7 @@ def check_car_number():
     if not car_number:
         return jsonify({"exists": False})
 
-    query = Car.query.filter_by(number=car_number)
+    query = Car.query.filter_by(number=car_number, is_deleted=False)
     if car_id is not None and car_id != "":
         try:
             query = query.filter(Car.id != int(car_id))
@@ -780,44 +832,6 @@ def check_car_number():
             pass
     existing = query.first()
     return jsonify({"exists": bool(existing)})
-
-
-@app.route("/api/increase-stock", methods=["POST"])
-@admin_required
-def increase_stock():
-    _ensure_car_stock_column()
-
-    payload = request.get_json(silent=True) or {}
-    car_id_raw = payload.get("car_id")
-    liters_raw = payload.get("liters")
-
-    try:
-        car_id = int(car_id_raw)
-    except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "Выберите корректную машину."}), 400
-
-    try:
-        liters = float(liters_raw)
-        if liters <= 0:
-            raise ValueError
-    except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "Количество литров должно быть больше 0."}), 400
-
-    car = Car.query.get(car_id)
-    if not car:
-        return jsonify({"ok": False, "error": "Машина не найдена."}), 404
-
-    car.stock = round(float(car.stock or 0) + liters, 2)
-    db.session.commit()
-
-    app.logger.info(
-        "Stock increased: car_id=%s, liters=%s, user_id=%s",
-        car_id,
-        liters,
-        session.get("user_id"),
-    )
-
-    return jsonify({"ok": True, "car_id": car.id, "stock": car.stock})
 
 
 @app.route("/api/set-daily-stock", methods=["POST"])
@@ -829,30 +843,31 @@ def set_daily_stock():
     liters_raw = payload.get("liters")
 
     try:
-        liters = float(liters_raw)
+        liters = Decimal(str(liters_raw))
         if liters <= 0:
             raise ValueError
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, InvalidOperation):
         return jsonify({"ok": False, "error": "Количество литров должно быть больше 0."}), 400
 
     today = datetime.now(timezone.utc).date()
     daily_stock = _get_or_create_daily_stock(today)
-    daily_stock.current_stock = round(float(daily_stock.current_stock) + liters, 2)
+    liters = _to_decimal_2(liters)
+    daily_stock.current_stock = _to_decimal_2(daily_stock.current_stock or 0) + liters
     db.session.add(StockHistory(stock_date=today, added_liters=liters))
     db.session.commit()
 
     app.logger.info(
         "Daily stock increased: stock_date=%s, liters=%s, user_id=%s",
         today.isoformat(),
-        liters,
+        str(liters),
         session.get("user_id"),
     )
 
     return jsonify({
         "ok": True,
         "stock_date": today.isoformat(),
-        "current_stock": daily_stock.current_stock,
-        "added_liters": liters,
+        "current_stock": str(_to_decimal_2(daily_stock.current_stock)),
+        "added_liters": str(liters),
     })
 
 
@@ -866,7 +881,8 @@ def api_car_search():
         return jsonify([])
     cars = (
         Car.query.options(joinedload(Car.client))
-        .filter(Car.number.ilike(f"%{q}%"))
+        .join(Car.client)
+        .filter(Car.is_deleted.is_(False), Client.is_deleted.is_(False), Car.number.ilike(f"%{q}%"))
         .limit(10)
         .all()
     )
@@ -896,7 +912,7 @@ def receipts():
         else:
             try:
                 car = Car.query.get(int(form["car_id"]))
-                if not car:
+                if not car or car.is_deleted or (car.client and car.client.is_deleted):
                     errors["car_id"] = "Машина не найдена."
             except (TypeError, ValueError):
                 errors["car_id"] = "Выберите корректную машину."
@@ -910,10 +926,11 @@ def receipts():
             liters = None
 
         try:
-            amount = float(form["amount"])
+            amount = Decimal(form["amount"])
             if amount <= 0:
                 raise ValueError
-        except (ValueError, TypeError):
+            amount = _to_decimal_2(amount)
+        except (ValueError, TypeError, InvalidOperation):
             errors["amount"] = "Введите корректную сумму."
             amount = None
 
@@ -929,7 +946,13 @@ def receipts():
             db.session.commit()
             return redirect(url_for("receipts"))
 
-    cars = Car.query.options(joinedload(Car.client)).order_by(Car.number.asc()).all()
+    cars = (
+        Car.query.options(joinedload(Car.client))
+        .join(Car.client)
+        .filter(Car.is_deleted.is_(False), Client.is_deleted.is_(False))
+        .order_by(Car.number.asc())
+        .all()
+    )
     query = Receipt.query.options(joinedload(Receipt.car).joinedload(Car.client))
     if start_date:
         query = query.filter(Receipt.created_at >= datetime.combine(start_date, time.min))
@@ -971,7 +994,12 @@ def sales():
         form["payment_amount"] = request.form.get("payment_amount", "").strip()
         form["note"] = request.form.get("note", "").strip()
 
-        car = Car.query.filter_by(number=form["car_number"]).first() if form["car_number"] else None
+        car = (
+            Car.query
+            .join(Car.client)
+            .filter(Car.number == form["car_number"], Car.is_deleted.is_(False), Client.is_deleted.is_(False))
+            .first()
+        ) if form["car_number"] else None
         if not form["car_number"]:
             errors["car_number"] = "Введите номер машины."
         elif not car:
@@ -986,10 +1014,11 @@ def sales():
             liters = None
 
         try:
-            price = float(form["price_per_liter"])
+            price = Decimal(form["price_per_liter"])
             if price <= 0:
                 raise ValueError
-        except (ValueError, TypeError):
+            price = _to_decimal_2(price)
+        except (ValueError, TypeError, InvalidOperation):
             errors["price_per_liter"] = "Введите корректную цену за литр."
             price = None
 
@@ -1002,14 +1031,15 @@ def sales():
                 errors["payment_amount"] = "Введите сумму оплаты."
             else:
                 try:
-                    payment_amount = float(form["payment_amount"])
+                    payment_amount = Decimal(form["payment_amount"])
                     if payment_amount < 0:
                         raise ValueError
-                except (ValueError, TypeError):
+                    payment_amount = _to_decimal_2(payment_amount)
+                except (ValueError, TypeError, InvalidOperation):
                     errors["payment_amount"] = "Введите корректную сумму оплаты."
 
         if not errors:
-            total = round(liters * price, 2)
+            total = _to_decimal_2(Decimal(str(liters)) * price)
             sale = Sale(
                 car_id=car.id,
                 liters=liters,
@@ -1035,7 +1065,9 @@ def sales():
             _ensure_daily_stock_tables()
             sale_date = datetime.now(timezone.utc).date()
             daily_stock = _get_or_create_daily_stock(sale_date)
-            daily_stock.current_stock = round(float(daily_stock.current_stock) - liters, 2)
+            daily_stock.current_stock = _to_decimal_2(
+                _to_decimal_2(daily_stock.current_stock or 0) - _to_decimal_2(liters)
+            )
             db.session.commit()
             return redirect(url_for("sales_journal"))
 
@@ -1165,9 +1197,9 @@ def _build_cash_rows(start_date, end_date):
             }
         method = payment.payment_method or ""
         if payment.payment_type == "продажа" and method in ("наличка", "безнал", "доллар"):
-            daily[date_key][f"sale_{method}"] += payment.amount
+            daily[date_key][f"sale_{method}"] += float(payment.amount or 0)
         elif payment.payment_type == "долг" and method in ("наличка", "безнал", "доллар"):
-            daily[date_key][f"debt_{method}"] += payment.amount
+            daily[date_key][f"debt_{method}"] += float(payment.amount or 0)
 
     rows = []
     for date_key, data in daily.items():
@@ -1479,12 +1511,12 @@ def debts_by_client():
             clients_map[client.id] = {
                 "client": client,
                 "count": 0,
-                "total_debt": 0.0,
-                "total_paid": 0.0,
+                "total_debt": Decimal("0.00"),
+                "total_paid": Decimal("0.00"),
             }
         clients_map[client.id]["count"] += 1
-        clients_map[client.id]["total_debt"] += sale.total
-        clients_map[client.id]["total_paid"] += sale.payment_amount or 0.0
+        clients_map[client.id]["total_debt"] += _to_decimal_2(sale.total)
+        clients_map[client.id]["total_paid"] += _to_decimal_2(sale.payment_amount)
 
     rows = []
     for data in clients_map.values():
@@ -1512,22 +1544,23 @@ def pay_debt(sale_id):
     sale = Sale.query.options(joinedload(Sale.car).joinedload(Car.client)).get_or_404(sale_id)
     amount_str = request.form.get("amount", "").strip()
     try:
-        amount = float(amount_str)
+        amount = Decimal(amount_str)
         if amount <= 0:
             raise ValueError
-    except (ValueError, TypeError):
+        amount = _to_decimal_2(amount)
+    except (ValueError, TypeError, InvalidOperation):
         return redirect(url_for("debts_journal"))
 
     payment_method = request.form.get("payment_method", "").strip()
     if payment_method not in ["наличка", "безнал", "доллар"]:
         return redirect(url_for("debts_journal"))
 
-    remaining = sale.total - (sale.payment_amount or 0.0)
+    remaining = _to_decimal_2(sale.total) - _to_decimal_2(sale.payment_amount)
     if amount > remaining:
         amount = remaining
 
-    sale.payment_amount = round((sale.payment_amount or 0.0) + amount, 2)
-    if sale.payment_amount >= round(sale.total, 2):
+    sale.payment_amount = _to_decimal_2(Decimal(str(sale.payment_amount or 0)) + amount)
+    if sale.payment_amount >= _to_decimal_2(sale.total):
         sale.payment_method = payment_method
 
     payment = Payment(
@@ -1642,8 +1675,8 @@ def turnover():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-        _ensure_car_stock_column()
         _ensure_daily_stock_tables()
+        _ensure_client_car_soft_delete()
         _ensure_sale_payment_user_columns()
 
         legacy_users = User.query.all()

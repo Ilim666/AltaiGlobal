@@ -58,6 +58,7 @@ class Car(db.Model):
     note = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sales = db.relationship("Sale", backref="car", lazy=True, cascade="all, delete-orphan")
+    receipts = db.relationship("Receipt", backref="car", lazy=True, cascade="all, delete-orphan")
 
 
 PAYMENT_METHODS = ["наличка", "безнал", "доллар", "долг"]
@@ -74,6 +75,15 @@ class Sale(db.Model):
     note = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     payments = db.relationship("Payment", backref="sale", lazy=True, cascade="all, delete-orphan")
+
+
+class Receipt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    car_id = db.Column(db.Integer, db.ForeignKey("car.id"), nullable=False)
+    liters = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    notes = db.Column(db.Text, nullable=True)
 
 
 PAYMENT_TYPES = ["продажа", "долг"]
@@ -138,6 +148,19 @@ def _parse_iso_date(value):
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def _coerce_day(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
 
 
 def _remaining_goods_by_day(days):
@@ -650,6 +673,87 @@ def api_car_search():
     ])
 
 
+@app.route("/receipts", methods=["GET", "POST"])
+@login_required
+def receipts():
+    start_date = _parse_iso_date(request.args.get("start_date"))
+    end_date = _parse_iso_date(request.args.get("end_date"))
+    errors = {}
+    form = {}
+
+    if request.method == "POST":
+        form["car_id"] = request.form.get("car_id", "").strip()
+        form["liters"] = request.form.get("liters", "").strip()
+        form["amount"] = request.form.get("amount", "").strip()
+        form["notes"] = request.form.get("notes", "").strip()
+
+        car = None
+        if not form["car_id"]:
+            errors["car_id"] = "Выберите машину."
+        else:
+            try:
+                car = Car.query.get(int(form["car_id"]))
+                if not car:
+                    errors["car_id"] = "Машина не найдена."
+            except (TypeError, ValueError):
+                errors["car_id"] = "Выберите корректную машину."
+
+        try:
+            liters = float(form["liters"])
+            if liters <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            errors["liters"] = "Введите корректное количество литров."
+            liters = None
+
+        try:
+            amount = float(form["amount"])
+            if amount <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            errors["amount"] = "Введите корректную сумму."
+            amount = None
+
+        if not errors:
+            db.session.add(
+                Receipt(
+                    car_id=car.id,
+                    liters=liters,
+                    amount=amount,
+                    notes=form["notes"] or None,
+                )
+            )
+            db.session.commit()
+            return redirect(url_for("receipts"))
+
+    cars = Car.query.options(joinedload(Car.client)).order_by(Car.number.asc()).all()
+    query = Receipt.query.options(joinedload(Receipt.car).joinedload(Car.client))
+    if start_date:
+        query = query.filter(Receipt.created_at >= datetime.combine(start_date, time.min))
+    if end_date:
+        query = query.filter(Receipt.created_at < datetime.combine(end_date + timedelta(days=1), time.min))
+    all_receipts = query.order_by(Receipt.created_at.desc()).all()
+
+    return render_template(
+        "receipts.html",
+        receipts=all_receipts,
+        cars=cars,
+        errors=errors,
+        form=form,
+        start_date=start_date.isoformat() if start_date else "",
+        end_date=end_date.isoformat() if end_date else "",
+    )
+
+
+@app.route("/receipts/<int:receipt_id>", methods=["POST", "DELETE"])
+@admin_required
+def delete_receipt(receipt_id):
+    receipt = Receipt.query.get_or_404(receipt_id)
+    db.session.delete(receipt)
+    db.session.commit()
+    return redirect(url_for("receipts"))
+
+
 @app.route("/sales", methods=["GET", "POST"])
 @login_required
 def sales():
@@ -933,24 +1037,34 @@ def turnover():
     end_date = _parse_iso_date(request.args.get("end_date"))
 
     sale_day = func.date(Sale.created_at)
+    receipt_day = func.date(Receipt.created_at)
     payment_method = func.lower(func.coalesce(Sale.payment_method, ""))
 
-    query = db.session.query(
+    sales_query = db.session.query(
         sale_day.label("sale_date"),
         func.coalesce(func.sum(Sale.liters), 0).label("liters"),
         func.coalesce(func.sum(Sale.total), 0).label("amount"),
         func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, 0), else_=func.coalesce(Sale.payment_amount, 0))), 0).label("payments"),
         func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, Sale.total), else_=Sale.total - func.coalesce(Sale.payment_amount, 0))), 0).label("debts"),
     )
+    receipts_query = db.session.query(
+        receipt_day.label("receipt_date"),
+        func.coalesce(func.sum(Receipt.liters), 0).label("receipt_liters"),
+    )
 
     if start_date:
-        query = query.filter(Sale.created_at >= datetime.combine(start_date, time.min))
+        min_dt = datetime.combine(start_date, time.min)
+        sales_query = sales_query.filter(Sale.created_at >= min_dt)
+        receipts_query = receipts_query.filter(Receipt.created_at >= min_dt)
     if end_date:
-        query = query.filter(Sale.created_at < datetime.combine(end_date + timedelta(days=1), time.min))
+        max_dt = datetime.combine(end_date + timedelta(days=1), time.min)
+        sales_query = sales_query.filter(Sale.created_at < max_dt)
+        receipts_query = receipts_query.filter(Receipt.created_at < max_dt)
 
     rows_data = []
     totals = {
         "liters": 0.0,
+        "receipts_liters": 0.0,
         "amount": 0.0,
         "payments": 0.0,
         "debts": 0.0,
@@ -959,22 +1073,42 @@ def turnover():
     error_message = None
 
     try:
-        grouped_rows = query.group_by(sale_day).order_by(sale_day.desc()).all()
-        rows_with_dates = [
-            (row, datetime.strptime(row.sale_date, "%Y-%m-%d").date())
-            for row in grouped_rows
-            if row.sale_date
-        ]
-        remainder_map = _remaining_goods_by_day([row_date for _, row_date in rows_with_dates])
+        grouped_sales = sales_query.group_by(sale_day).all()
+        grouped_receipts = receipts_query.group_by(receipt_day).all()
 
-        for row, row_date in rows_with_dates:
-            liters = float(row.liters or 0)
-            amount = float(row.amount or 0)
-            payments = float(row.payments or 0)
-            debts = float(row.debts or 0)
+        sales_map = {}
+        for row in grouped_sales:
+            row_date = _coerce_day(row.sale_date)
+            if not row_date:
+                continue
+            sales_map[row_date] = {
+                "liters": float(row.liters or 0),
+                "amount": float(row.amount or 0),
+                "payments": float(row.payments or 0),
+                "debts": float(row.debts or 0),
+            }
+
+        receipts_map = {}
+        for row in grouped_receipts:
+            row_date = _coerce_day(row.receipt_date)
+            if not row_date:
+                continue
+            receipts_map[row_date] = float(row.receipt_liters or 0)
+
+        all_days = sorted(set(sales_map.keys()) | set(receipts_map.keys()), reverse=True)
+
+        for row_date in all_days:
+            sales_row = sales_map.get(row_date, {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0})
+            liters = sales_row["liters"]
+            amount = sales_row["amount"]
+            payments = sales_row["payments"]
+            debts = sales_row["debts"]
+            receipts_liters = receipts_map.get(row_date, 0.0)
             average_price = amount / liters if liters else 0.0
+            remaining_goods = receipts_liters - liters
 
             totals["liters"] += liters
+            totals["receipts_liters"] += receipts_liters
             totals["amount"] += amount
             totals["payments"] += payments
             totals["debts"] += debts
@@ -984,11 +1118,12 @@ def turnover():
                     "date": row_date,
                     "date_label": row_date.strftime("%d.%m.%Y"),
                     "liters": liters,
+                    "receipts_liters": receipts_liters,
                     "amount": amount,
                     "payments": payments,
                     "debts": debts,
                     "average_price": average_price,
-                    "remaining_goods": remainder_map.get(row_date),
+                    "remaining_goods": remaining_goods,
                 }
             )
 

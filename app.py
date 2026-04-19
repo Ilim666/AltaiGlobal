@@ -594,6 +594,8 @@ def pay_debt(sale_id):
         amount = remaining
 
     sale.payment_amount = round((sale.payment_amount or 0.0) + amount, 2)
+    if sale.payment_amount >= round(sale.total, 2):
+        sale.payment_method = payment_method
 
     payment = Payment(
         client_id=sale.car.client_id,

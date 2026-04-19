@@ -16,7 +16,7 @@
                 <h5 class="mb-0">Данные машины</h5>
             </div>
             <div class="card-body">
-                <form method="post" novalidate>
+                <form method="post" id="addCarForm" novalidate>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Клиент <span class="text-danger">*</span></label>
                         <select class="form-select {% if errors.client_id %}is-invalid{% endif %}" name="client_id" id="client_select">
@@ -34,8 +34,9 @@
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Номер машины <span class="text-danger">*</span></label>
                             <input type="text" class="form-control {% if errors.number %}is-invalid{% endif %}"
-                                   name="number" value="{{ form.number or '' }}" placeholder="А123БВ">
+                                   name="number" id="car_number" value="{{ form.number or '' }}" placeholder="А123БВ">
                             {% if errors.number %}<div class="invalid-feedback">{{ errors.number }}</div>{% endif %}
+                            <div class="realtime-feedback" id="carNumberFeedback"></div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Марка <span class="text-danger">*</span></label>
@@ -70,20 +71,87 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var selectEl = document.getElementById('client_select');
-    var isInvalid = selectEl.classList.contains('is-invalid');
-    var ts = new TomSelect(selectEl, {
-        placeholder: '— Выберите клиента —',
-        searchField: ['text'],
-        allowEmptyOption: true,
-        render: {
-            no_results: function () {
-                return '<div class="no-results">Клиент не найден</div>';
+    var carNumberInput = document.getElementById('car_number');
+    var carNumberFeedback = document.getElementById('carNumberFeedback');
+    var form = document.getElementById('addCarForm');
+    var hasCarNumberError = false;
+
+    var setFeedback = function (isError, message) {
+        carNumberFeedback.textContent = message || '';
+        carNumberFeedback.classList.remove('text-danger', 'text-success');
+        if (!message) {
+            carNumberInput.classList.remove('is-invalid', 'is-valid');
+            return;
+        }
+        if (isError) {
+            hasCarNumberError = true;
+            carNumberFeedback.classList.add('text-danger');
+            carNumberInput.classList.add('is-invalid');
+            carNumberInput.classList.remove('is-valid');
+        } else {
+            hasCarNumberError = false;
+            carNumberFeedback.classList.add('text-success');
+            carNumberInput.classList.remove('is-invalid');
+            carNumberInput.classList.add('is-valid');
+        }
+    };
+
+    var requestId = 0;
+    var validateCarNumber = async function () {
+        var number = carNumberInput.value.trim();
+        if (!number) {
+            hasCarNumberError = false;
+            setFeedback(false, '');
+            return;
+        }
+        var currentRequest = ++requestId;
+        try {
+            var response = await fetch('/api/check-car-number', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    car_number: number
+                })
+            });
+            if (!response.ok || currentRequest !== requestId) return;
+            var data = await response.json();
+            if (currentRequest !== requestId) return;
+            if (data.exists) {
+                setFeedback(true, 'Машина с таким номером уже существует.');
+            } else {
+                setFeedback(false, '✅ Номер машины свободен');
             }
+        } catch (e) {
+            if (currentRequest !== requestId) return;
+            hasCarNumberError = false;
+            setFeedback(false, '');
+        }
+    };
+
+    if (window.TomSelect) {
+        var isInvalid = selectEl.classList.contains('is-invalid');
+        var ts = new TomSelect(selectEl, {
+            placeholder: '— Выберите клиента —',
+            searchField: ['text'],
+            allowEmptyOption: true,
+            render: {
+                no_results: function () {
+                    return '<div class="no-results">Клиент не найден</div>';
+                }
+            }
+        });
+        if (isInvalid) {
+            ts.wrapper.classList.add('is-invalid');
+        }
+    }
+
+    carNumberInput.addEventListener('input', validateCarNumber);
+    selectEl.addEventListener('change', validateCarNumber);
+    form.addEventListener('submit', function (e) {
+        if (hasCarNumberError) {
+            e.preventDefault();
         }
     });
-    if (isInvalid) {
-        ts.wrapper.classList.add('is-invalid');
-    }
 });
 </script>
 {% endblock %}

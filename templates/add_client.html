@@ -18,8 +18,9 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">ФИО <span class="text-danger">*</span></label>
                         <input type="text" class="form-control {% if errors.fio %}is-invalid{% endif %}"
-                               name="fio" value="{{ form.fio or '' }}" placeholder="Иванов Иван Иванович">
+                               name="fio" id="fio" value="{{ form.fio or '' }}" placeholder="Иванов Иван Иванович">
                         {% if errors.fio %}<div class="invalid-feedback">{{ errors.fio }}</div>{% endif %}
+                        <div class="realtime-feedback" id="fioFeedback"></div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Телефон (10 цифр) <span class="text-danger">*</span></label>
@@ -31,6 +32,7 @@
                         {% else %}
                             <div class="form-text">Формат: 1234-567-890</div>
                         {% endif %}
+                        <div class="realtime-feedback" id="phoneFeedback"></div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">ИНН (14 цифр) <span class="text-danger">*</span></label>
@@ -38,6 +40,7 @@
                                name="inn" id="inn" value="{{ form.inn or '' }}"
                                placeholder="12345678901234" maxlength="14">
                         {% if errors.inn %}<div class="invalid-feedback">{{ errors.inn }}</div>{% endif %}
+                        <div class="realtime-feedback" id="innFeedback"></div>
                     </div>
                 </div>
             </div>
@@ -52,9 +55,10 @@
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Номер машины <span class="text-danger">*</span></label>
                             <input type="text" class="form-control {% if errors.car_number %}is-invalid{% endif %}"
-                                   name="car_number" value="{{ form.car_number or '' }}"
+                                   name="car_number" id="car_number" value="{{ form.car_number or '' }}"
                                    placeholder="А123БВ">
                             {% if errors.car_number %}<div class="invalid-feedback">{{ errors.car_number }}</div>{% endif %}
+                            <div class="realtime-feedback" id="carNumberFeedback"></div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Марка <span class="text-danger">*</span></label>
@@ -85,17 +89,177 @@
 </div>
 
 <script>
-// Phone format: auto-format as 4-3-3 on display but store digits
-const phoneInput = document.getElementById('phone');
-phoneInput.addEventListener('input', function () {
-    let digits = this.value.replace(/\D/g, '').slice(0, 10);
-    this.value = digits;
-});
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('addClientForm');
+    const fioInput = document.getElementById('fio');
+    const phoneInput = document.getElementById('phone');
+    const innInput = document.getElementById('inn');
+    const carNumberInput = document.getElementById('car_number');
+    const fioFeedback = document.getElementById('fioFeedback');
+    const phoneFeedback = document.getElementById('phoneFeedback');
+    const innFeedback = document.getElementById('innFeedback');
+    const carNumberFeedback = document.getElementById('carNumberFeedback');
 
-// INN: digits only
-const innInput = document.getElementById('inn');
-innInput.addEventListener('input', function () {
-    this.value = this.value.replace(/\D/g, '').slice(0, 14);
+    const state = {
+        fio: false,
+        phone: false,
+        inn: false,
+        car_number: false
+    };
+
+    const setFeedback = function (input, feedback, isError, message) {
+        feedback.textContent = message || '';
+        feedback.classList.remove('text-danger', 'text-success');
+        if (!message) {
+            input.classList.remove('is-invalid', 'is-valid');
+            return;
+        }
+        if (isError) {
+            feedback.classList.add('text-danger');
+            input.classList.add('is-invalid');
+            input.classList.remove('is-valid');
+        } else {
+            feedback.classList.add('text-success');
+            input.classList.remove('is-invalid');
+            input.classList.add('is-valid');
+        }
+    };
+
+    const postJSON = async function (url, payload) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('request_failed');
+        return response.json();
+    };
+
+    let fioRequest = 0;
+    let phoneRequest = 0;
+    let innRequest = 0;
+    let carRequest = 0;
+
+    const validateFio = async function () {
+        const fio = fioInput.value.trim();
+        if (!fio) {
+            state.fio = false;
+            setFeedback(fioInput, fioFeedback, false, '');
+            return;
+        }
+        const requestId = ++fioRequest;
+        try {
+            const data = await postJSON('/api/check-fio', { fio: fio });
+            if (requestId !== fioRequest) return;
+            state.fio = !!data.exists;
+            if (data.exists) {
+                setFeedback(fioInput, fioFeedback, true, 'Клиент с таким ФИО уже существует.');
+            } else {
+                setFeedback(fioInput, fioFeedback, false, '✅ ФИО свободно');
+            }
+        } catch (e) {
+            if (requestId !== fioRequest) return;
+            state.fio = false;
+            setFeedback(fioInput, fioFeedback, false, '');
+        }
+    };
+
+    const validatePhone = async function () {
+        const digits = phoneInput.value.replace(/\D/g, '').slice(0, 10);
+        phoneInput.value = digits;
+        if (!digits) {
+            state.phone = false;
+            setFeedback(phoneInput, phoneFeedback, false, '');
+            return;
+        }
+        const requestId = ++phoneRequest;
+        try {
+            const data = await postJSON('/api/check-phone', { phone: digits });
+            if (requestId !== phoneRequest) return;
+            if (!data.valid) {
+                state.phone = true;
+                setFeedback(phoneInput, phoneFeedback, true, '⚠️ Введите 10 цифр');
+                return;
+            }
+            if (data.exists) {
+                state.phone = true;
+                setFeedback(phoneInput, phoneFeedback, true, 'Телефон уже используется.');
+                return;
+            }
+            state.phone = false;
+            setFeedback(phoneInput, phoneFeedback, false, '✅ ' + data.formatted);
+        } catch (e) {
+            if (requestId !== phoneRequest) return;
+            state.phone = false;
+            setFeedback(phoneInput, phoneFeedback, false, '');
+        }
+    };
+
+    const validateInn = async function () {
+        innInput.value = innInput.value.replace(/\D/g, '').slice(0, 14);
+        const inn = innInput.value.trim();
+        if (!inn) {
+            state.inn = false;
+            setFeedback(innInput, innFeedback, false, '');
+            return;
+        }
+        const requestId = ++innRequest;
+        try {
+            const data = await postJSON('/api/check-inn', { inn: inn });
+            if (requestId !== innRequest) return;
+            if (!data.valid) {
+                state.inn = true;
+                setFeedback(innInput, innFeedback, true, '⚠️ Введите 14 цифр');
+                return;
+            }
+            if (data.exists) {
+                state.inn = true;
+                setFeedback(innInput, innFeedback, true, 'ИНН уже используется.');
+                return;
+            }
+            state.inn = false;
+            setFeedback(innInput, innFeedback, false, '✅ Формат верный');
+        } catch (e) {
+            if (requestId !== innRequest) return;
+            state.inn = false;
+            setFeedback(innInput, innFeedback, false, '');
+        }
+    };
+
+    const validateCarNumber = async function () {
+        const carNumber = carNumberInput.value.trim();
+        if (!carNumber) {
+            state.car_number = false;
+            setFeedback(carNumberInput, carNumberFeedback, false, '');
+            return;
+        }
+        const requestId = ++carRequest;
+        try {
+            const data = await postJSON('/api/check-car-number', { car_number: carNumber });
+            if (requestId !== carRequest) return;
+            state.car_number = !!data.exists;
+            if (data.exists) {
+                setFeedback(carNumberInput, carNumberFeedback, true, 'Машина с таким номером уже существует.');
+            } else {
+                setFeedback(carNumberInput, carNumberFeedback, false, '✅ Номер машины свободен');
+            }
+        } catch (e) {
+            if (requestId !== carRequest) return;
+            state.car_number = false;
+            setFeedback(carNumberInput, carNumberFeedback, false, '');
+        }
+    };
+
+    fioInput.addEventListener('input', validateFio);
+    phoneInput.addEventListener('input', validatePhone);
+    innInput.addEventListener('input', validateInn);
+    carNumberInput.addEventListener('input', validateCarNumber);
+
+    form.addEventListener('submit', function (e) {
+        if (state.fio || state.phone || state.inn || state.car_number) {
+            e.preventDefault();
+        }
+    });
 });
 </script>
 {% endblock %}

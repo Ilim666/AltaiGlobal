@@ -15,7 +15,26 @@ from sqlalchemy.orm import joinedload
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or os.urandom(32).hex()
+
+
+def _get_secret_key():
+    env_secret = os.getenv("SECRET_KEY")
+    if env_secret:
+        return env_secret
+
+    os.makedirs(app.instance_path, exist_ok=True)
+    secret_path = os.path.join(app.instance_path, ".secret_key")
+    if os.path.exists(secret_path):
+        with open(secret_path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+
+    secret = secrets.token_hex(32)
+    with open(secret_path, "w", encoding="utf-8") as f:
+        f.write(secret)
+    return secret
+
+
+app.config["SECRET_KEY"] = _get_secret_key()
 db = SQLAlchemy(app)
 
 
@@ -116,10 +135,7 @@ def admin_required(f):
 
 
 def verify_user_password(user, password):
-    stored_password = user.password or ""
-    if stored_password.startswith(("pbkdf2:", "scrypt:")):
-        return check_password_hash(stored_password, password)
-    return stored_password == password
+    return check_password_hash(user.password or "", password)
 
 
 def validate_phone(phone):
@@ -940,13 +956,28 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
 
+        legacy_users = User.query.all()
+        for legacy_user in legacy_users:
+            if not (legacy_user.password or "").startswith(("pbkdf2:", "scrypt:")):
+                legacy_user.password = generate_password_hash(legacy_user.password or "")
+
+        debug_mode = os.getenv("FLASK_DEBUG", "False") == "True"
+        admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD")
+        operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD")
+
+        if debug_mode:
+            admin_password = admin_password or "admin123"
+            operator_password = operator_password or "operator123"
+
         if not User.query.filter_by(username="admin").first():
-            admin = User(username="admin", password=generate_password_hash("admin123"), role="admin")
-            db.session.add(admin)
+            if admin_password:
+                admin = User(username="admin", password=generate_password_hash(admin_password), role="admin")
+                db.session.add(admin)
 
         if not User.query.filter_by(username="operator").first():
-            operator = User(username="operator", password=generate_password_hash("operator123"), role="operator")
-            db.session.add(operator)
+            if operator_password:
+                operator = User(username="operator", password=generate_password_hash(operator_password), role="operator")
+                db.session.add(operator)
 
         db.session.commit()
 

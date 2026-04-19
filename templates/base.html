@@ -100,10 +100,10 @@
                 <hr class="my-3">
                 <div class="mb-3">
                     <small class="text-muted d-block mb-2">АДМИНИСТРАТОР</small>
-                    <a class="nav-link {% if request.endpoint == 'turnover' %}active{% endif %}" href="{{ url_for('turnover') }}">
+                    <a class="nav-link {% if request.path == '/turnover' %}active{% endif %}" href="{{ url_for('turnover') }}">
                         📈 Оборот
                     </a>
-                    <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}" href="{{ url_for('admin_users') }}">
+                    <a class="nav-link {% if request.path.startswith('/admin/users') %}active{% endif %}" href="{{ url_for('admin_users') }}">
                         👥 Управление пользователями
                     </a>
                 </div>

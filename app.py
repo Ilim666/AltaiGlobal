@@ -81,6 +81,8 @@ def _remaining_goods_by_day(days: List[date]) -> Dict[date, float]:
         ).scalar_one()
         return {day: float(total_remaining or 0) for day in days}
 
+    if not days:
+        return {}
     min_day = min(days).isoformat()
     max_day = max(days).isoformat()
     rows = db.session.execute(
@@ -161,7 +163,11 @@ def turnover():
 
         totals["average_price"] = totals["amount"] / totals["liters"] if totals["liters"] else 0.0
     except SQLAlchemyError:
-        app.logger.exception("Failed to build turnover report")
+        app.logger.exception(
+            "Failed to build turnover report for date range %s - %s",
+            start_date.isoformat() if start_date else "any",
+            end_date.isoformat() if end_date else "any",
+        )
         rows_data = []
 
     return render_template(

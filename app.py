@@ -1415,7 +1415,7 @@ def sales_journal():
     q = request.args.get("q", "").strip()
     query = (
         Sale.query
-        .options(joinedload(Sale.car).joinedload(Car.client))
+        .options(joinedload(Sale.car).joinedload(Car.client), joinedload(Sale.created_by_user))
         .join(Sale.car)
         .join(Car.client)
         .filter(Sale.created_at >= start_dt, Sale.created_at < end_dt)

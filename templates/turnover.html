@@ -34,13 +34,14 @@
 
 {% set data = rows if rows is defined else [] %}
 {% if data %}
-{% set ns = namespace(total_liters=0, total_amount=0, total_payments=0, total_debts=0) %}
+{% set ns = namespace(total_liters=0, total_receipts=0, total_amount=0, total_payments=0, total_debts=0) %}
 <div class="card shadow-sm">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0 text-nowrap">
             <thead class="table-dark">
                 <tr>
                     <th>Дата</th>
+                    <th>Поступления за день (л)</th>
                     <th>Литр</th>
                     <th>Сумма</th>
                     <th>Оплаты</th>
@@ -52,12 +53,14 @@
             <tbody>
             {% for row in data %}
                 {% set liters = (row.liters if row.liters is defined else (row.liter if row.liter is defined else 0))|float %}
+                {% set receipts_liters = row.receipts_liters|float if row.receipts_liters is defined else 0 %}
                 {% set amount = row.amount|float if row.amount is defined else 0 %}
                 {% set payments = row.payments|float if row.payments is defined else 0 %}
                 {% set debts = row.debts|float if row.debts is defined else 0 %}
                 {% set avg_price = row.avg_price|float if row.avg_price is defined else ((row.average_price|float) if row.average_price is defined else 0) %}
                 {% set stock = row.remaining_goods if row.remaining_goods is defined else (row.stock if row.stock is defined else 0) %}
                 {% set ns.total_liters = ns.total_liters + liters %}
+                {% set ns.total_receipts = ns.total_receipts + receipts_liters %}
                 {% set ns.total_amount = ns.total_amount + amount %}
                 {% set ns.total_payments = ns.total_payments + payments %}
                 {% set ns.total_debts = ns.total_debts + debts %}
@@ -71,6 +74,7 @@
                             —
                         {% endif %}
                     </td>
+                    <td>{{ "%.2f"|format(receipts_liters) }}</td>
                     <td>{{ "%.2f"|format(liters) }}</td>
                     <td>{{ "%.2f"|format(amount) }}</td>
                     <td>{{ "%.2f"|format(payments) }}</td>
@@ -89,6 +93,7 @@
             <tfoot>
                 <tr class="table-light fw-bold">
                     <td>ИТОГО</td>
+                    <td>{{ "%.2f"|format(ns.total_receipts) }}</td>
                     <td>{{ "%.2f"|format(ns.total_liters) }}</td>
                     <td>{{ "%.2f"|format(ns.total_amount) }}</td>
                     <td>{{ "%.2f"|format(ns.total_payments) }}</td>

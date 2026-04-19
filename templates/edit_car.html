@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var carNumberInput = document.getElementById('car_number');
     var carId = document.getElementById('car_id').value;
     var feedback = document.getElementById('carNumberFeedback');
-    var hasError = false;
+    var hasCarNumberError = false;
     var requestId = 0;
 
     var setFeedback = function (isError, message) {
@@ -66,12 +66,12 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         if (isError) {
-            hasError = true;
+            hasCarNumberError = true;
             feedback.classList.add('text-danger');
             carNumberInput.classList.add('is-invalid');
             carNumberInput.classList.remove('is-valid');
         } else {
-            hasError = false;
+            hasCarNumberError = false;
             feedback.classList.add('text-success');
             carNumberInput.classList.remove('is-invalid');
             carNumberInput.classList.add('is-valid');
@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var validateCarNumber = async function () {
         var number = carNumberInput.value.trim();
         if (!number) {
-            hasError = false;
+            hasCarNumberError = false;
             setFeedback(false, '');
             return;
         }
@@ -104,14 +104,14 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (e) {
             if (currentRequest !== requestId) return;
-            hasError = false;
+            hasCarNumberError = false;
             setFeedback(false, '');
         }
     };
 
     carNumberInput.addEventListener('input', validateCarNumber);
     form.addEventListener('submit', function (e) {
-        if (hasError) {
+        if (hasCarNumberError) {
             e.preventDefault();
         }
     });

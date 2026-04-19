@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const innFeedback = document.getElementById('innFeedback');
     const carNumberFeedback = document.getElementById('carNumberFeedback');
 
-    const state = {
+    const hasError = {
         fio: false,
         phone: false,
         inn: false,
@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const validateFio = async function () {
         const fio = fioInput.value.trim();
         if (!fio) {
-            state.fio = false;
+            hasError.fio = false;
             setFeedback(fioInput, fioFeedback, false, '');
             return;
         }
@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const data = await postJSON('/api/check-fio', { fio: fio });
             if (requestId !== fioRequest) return;
-            state.fio = !!data.exists;
+            hasError.fio = !!data.exists;
             if (data.exists) {
                 setFeedback(fioInput, fioFeedback, true, 'Клиент с таким ФИО уже существует.');
             } else {
@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (e) {
             if (requestId !== fioRequest) return;
-            state.fio = false;
+            hasError.fio = false;
             setFeedback(fioInput, fioFeedback, false, '');
         }
     };
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const digits = phoneInput.value.replace(/\D/g, '').slice(0, 10);
         phoneInput.value = digits;
         if (!digits) {
-            state.phone = false;
+            hasError.phone = false;
             setFeedback(phoneInput, phoneFeedback, false, '');
             return;
         }
@@ -177,20 +177,20 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await postJSON('/api/check-phone', { phone: digits });
             if (requestId !== phoneRequest) return;
             if (!data.valid) {
-                state.phone = true;
+                hasError.phone = true;
                 setFeedback(phoneInput, phoneFeedback, true, '⚠️ Введите 10 цифр');
                 return;
             }
             if (data.exists) {
-                state.phone = true;
+                hasError.phone = true;
                 setFeedback(phoneInput, phoneFeedback, true, 'Телефон уже используется.');
                 return;
             }
-            state.phone = false;
+            hasError.phone = false;
             setFeedback(phoneInput, phoneFeedback, false, '✅ ' + data.formatted);
         } catch (e) {
             if (requestId !== phoneRequest) return;
-            state.phone = false;
+            hasError.phone = false;
             setFeedback(phoneInput, phoneFeedback, false, '');
         }
     };
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function () {
         innInput.value = innInput.value.replace(/\D/g, '').slice(0, 14);
         const inn = innInput.value.trim();
         if (!inn) {
-            state.inn = false;
+            hasError.inn = false;
             setFeedback(innInput, innFeedback, false, '');
             return;
         }
@@ -208,20 +208,20 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await postJSON('/api/check-inn', { inn: inn });
             if (requestId !== innRequest) return;
             if (!data.valid) {
-                state.inn = true;
+                hasError.inn = true;
                 setFeedback(innInput, innFeedback, true, '⚠️ Введите 14 цифр');
                 return;
             }
             if (data.exists) {
-                state.inn = true;
+                hasError.inn = true;
                 setFeedback(innInput, innFeedback, true, 'ИНН уже используется.');
                 return;
             }
-            state.inn = false;
+            hasError.inn = false;
             setFeedback(innInput, innFeedback, false, '✅ Формат верный');
         } catch (e) {
             if (requestId !== innRequest) return;
-            state.inn = false;
+            hasError.inn = false;
             setFeedback(innInput, innFeedback, false, '');
         }
     };
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const validateCarNumber = async function () {
         const carNumber = carNumberInput.value.trim();
         if (!carNumber) {
-            state.car_number = false;
+            hasError.car_number = false;
             setFeedback(carNumberInput, carNumberFeedback, false, '');
             return;
         }
@@ -237,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const data = await postJSON('/api/check-car-number', { car_number: carNumber });
             if (requestId !== carRequest) return;
-            state.car_number = !!data.exists;
+            hasError.car_number = !!data.exists;
             if (data.exists) {
                 setFeedback(carNumberInput, carNumberFeedback, true, 'Машина с таким номером уже существует.');
             } else {
@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (e) {
             if (requestId !== carRequest) return;
-            state.car_number = false;
+            hasError.car_number = false;
             setFeedback(carNumberInput, carNumberFeedback, false, '');
         }
     };
@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', function () {
     carNumberInput.addEventListener('input', validateCarNumber);
 
     form.addEventListener('submit', function (e) {
-        if (state.fio || state.phone || state.inn || state.car_number) {
+        if (hasError.fio || hasError.phone || hasError.inn || hasError.car_number) {
             e.preventDefault();
         }
     });

@@ -50,7 +50,7 @@ class Client(db.Model):
     fio = db.Column(db.String(100), unique=True, nullable=False)
     phone = db.Column(db.String(10), nullable=False)
     inn = db.Column(db.String(14), nullable=False)
-    is_deleted = db.Column(db.Boolean, default=False)
+    is_deleted = db.Column(db.Boolean, default=False, server_default=text("0"), nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     cars = db.relationship("Car", backref="client", lazy=True)
@@ -64,7 +64,7 @@ class Car(db.Model):
     color = db.Column(db.String(50), nullable=False)
     note = db.Column(db.Text, nullable=True)
     stock = db.Column(db.Numeric(10, 2), default=0)
-    is_deleted = db.Column(db.Boolean, default=False)
+    is_deleted = db.Column(db.Boolean, default=False, server_default=text("0"), nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sales = db.relationship("Sale", backref="car", lazy=True)
@@ -234,6 +234,8 @@ def _format_number(value):
 
 
 def _to_decimal_2(value):
+    if value is None:
+        return Decimal("0.00")
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -322,9 +324,15 @@ def _ensure_client_car_soft_delete():
         if table_name in table_names:
             columns = {column["name"] for column in inspector.get_columns(table_name)}
             if "is_deleted" not in columns:
-                db.session.execute(text(f"ALTER TABLE {table_name} ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
+                if table_name == "client":
+                    db.session.execute(text("ALTER TABLE client ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
+                else:
+                    db.session.execute(text("ALTER TABLE car ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
             if "deleted_at" not in columns:
-                db.session.execute(text(f"ALTER TABLE {table_name} ADD COLUMN deleted_at DATETIME"))
+                if table_name == "client":
+                    db.session.execute(text("ALTER TABLE client ADD COLUMN deleted_at DATETIME"))
+                else:
+                    db.session.execute(text("ALTER TABLE car ADD COLUMN deleted_at DATETIME"))
     db.session.commit()
 
 
@@ -354,7 +362,7 @@ def _get_or_create_daily_stock(stock_date):
         .order_by(DailyStock.stock_date.desc())
         .first()
     )
-    base_stock = _to_decimal_2(previous_day_stock.current_stock or 0) if previous_day_stock else Decimal("0.00")
+    base_stock = _to_decimal_2(previous_day_stock.current_stock) if previous_day_stock else Decimal("0.00")
     daily_stock = DailyStock(stock_date=stock_date, current_stock=base_stock)
     db.session.add(daily_stock)
     db.session.flush()
@@ -654,7 +662,9 @@ def add_car():
                 selected_client_id = int(form["client_id"])
             except (TypeError, ValueError):
                 selected_client_id = None
-            client = Client.query.filter_by(id=selected_client_id, is_deleted=False).first() if selected_client_id else None
+            client = None
+            if selected_client_id:
+                client = Client.query.filter_by(id=selected_client_id, is_deleted=False).first()
             if not client:
                 errors["client_id"] = "Выберите корректного клиента."
             else:
@@ -856,8 +866,8 @@ def set_daily_stock():
     return jsonify({
         "ok": True,
         "stock_date": today.isoformat(),
-        "current_stock": float(daily_stock.current_stock or 0),
-        "added_liters": float(liters),
+        "current_stock": str(_to_decimal_2(daily_stock.current_stock)),
+        "added_liters": str(liters),
     })
 
 
@@ -902,7 +912,7 @@ def receipts():
         else:
             try:
                 car = Car.query.get(int(form["car_id"]))
-                if not car or car.is_deleted or car.client.is_deleted:
+                if not car or car.is_deleted or (car.client and car.client.is_deleted):
                     errors["car_id"] = "Машина не найдена."
             except (TypeError, ValueError):
                 errors["car_id"] = "Выберите корректную машину."
@@ -1055,7 +1065,9 @@ def sales():
             _ensure_daily_stock_tables()
             sale_date = datetime.now(timezone.utc).date()
             daily_stock = _get_or_create_daily_stock(sale_date)
-            daily_stock.current_stock = _to_decimal_2(daily_stock.current_stock or 0) - _to_decimal_2(liters)
+            daily_stock.current_stock = _to_decimal_2(
+                _to_decimal_2(daily_stock.current_stock or 0) - _to_decimal_2(liters)
+            )
             db.session.commit()
             return redirect(url_for("sales_journal"))
 
@@ -1503,8 +1515,8 @@ def debts_by_client():
                 "total_paid": Decimal("0.00"),
             }
         clients_map[client.id]["count"] += 1
-        clients_map[client.id]["total_debt"] += Decimal(str(sale.total or 0))
-        clients_map[client.id]["total_paid"] += Decimal(str(sale.payment_amount or 0))
+        clients_map[client.id]["total_debt"] += _to_decimal_2(sale.total)
+        clients_map[client.id]["total_paid"] += _to_decimal_2(sale.payment_amount)
 
     rows = []
     for data in clients_map.values():
@@ -1543,7 +1555,7 @@ def pay_debt(sale_id):
     if payment_method not in ["наличка", "безнал", "доллар"]:
         return redirect(url_for("debts_journal"))
 
-    remaining = Decimal(str(sale.total or 0)) - Decimal(str(sale.payment_amount or 0))
+    remaining = _to_decimal_2(sale.total) - _to_decimal_2(sale.payment_amount)
     if amount > remaining:
         amount = remaining
 

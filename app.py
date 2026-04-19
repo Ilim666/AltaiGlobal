@@ -221,7 +221,10 @@ def _ensure_car_stock_column():
     if "stock" in columns:
         return
 
-    db.session.execute(text(f"ALTER TABLE {table_name} ADD COLUMN stock FLOAT DEFAULT 0"))
+    if table_name == "car":
+        db.session.execute(text("ALTER TABLE car ADD COLUMN stock FLOAT DEFAULT 0"))
+    else:
+        db.session.execute(text("ALTER TABLE cars ADD COLUMN stock FLOAT DEFAULT 0"))
     db.session.commit()
 
 

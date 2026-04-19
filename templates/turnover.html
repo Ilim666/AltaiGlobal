@@ -49,7 +49,17 @@
                     <th>Оплаты</th>
                     <th>Долги</th>
                     <th>Средняя цена</th>
-                    <th>Остаток товара</th>
+                    <th>
+                        Остаток товара
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-light ms-2"
+                            data-bs-toggle="modal"
+                            data-bs-target="#increaseStockModal"
+                        >
+                            ➕ Увеличить
+                        </button>
+                    </th>
                 </tr>
             </thead>
             <tbody>
@@ -85,14 +95,6 @@
                         {% else %}
                             {{ stock }}
                         {% endif %}
-                        <button
-                            type="button"
-                            class="btn btn-sm btn-outline-success ms-2"
-                            data-bs-toggle="modal"
-                            data-bs-target="#increaseStockModal"
-                        >
-                            ➕ Увеличить
-                        </button>
                     </td>
                 </tr>
             {% endfor %}

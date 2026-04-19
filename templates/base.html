@@ -77,9 +77,6 @@
                 <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">👥 Список клиентов</a>
                 <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">➕ Добавить клиента</a>
 
-                <span class="nav-section-label">Пользователи</span>
-                <a class="nav-link {% if request.path.startswith('/admin/users') %}active{% endif %}" href="{{ url_for('admin_users') }}">👥 Управление пользователями</a>
-
                 <span class="nav-section-label">Машины</span>
                 <a class="nav-link {% if request.path == '/cars' %}active{% endif %}" href="/cars">🚗 Список машин</a>
                 <a class="nav-link {% if request.path == '/add-car' %}active{% endif %}" href="/add-car">🚙 Добавить машину</a>
@@ -98,7 +95,19 @@
             <span class="nav-section-label">Оплаты</span>
             <a class="nav-link {% if request.path == '/payments' %}active{% endif %}" href="/payments">💳 Журнал оплат</a>
             <a class="nav-link {% if request.path == '/cash' %}active{% endif %}" href="/cash">💵 Касса</a>
-            <a class="nav-link {% if request.path == '/turnover' %}active{% endif %}" href="/turnover">📈 Оборот</a>
+
+            {% if session.get("role") == "admin" %}
+                <hr class="my-3">
+                <div class="mb-3">
+                    <small class="text-muted d-block mb-2">АДМИНИСТРАТОР</small>
+                    <a class="nav-link {% if request.endpoint == 'turnover' %}active{% endif %}" href="{{ url_for('turnover') }}">
+                        📈 Оборот
+                    </a>
+                    <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}" href="{{ url_for('admin_users') }}">
+                        👥 Управление пользователями
+                    </a>
+                </div>
+            {% endif %}
         </nav>
     </aside>
     <main class="main-content">

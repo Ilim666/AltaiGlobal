@@ -927,7 +927,7 @@ def cash():
 
 
 @app.route("/turnover")
-@login_required
+@admin_required
 def turnover():
     start_date = _parse_iso_date(request.args.get("start_date"))
     end_date = _parse_iso_date(request.args.get("end_date"))

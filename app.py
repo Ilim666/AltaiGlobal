@@ -11,8 +11,8 @@ from sqlalchemy import case, func, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 
 app = Flask(__name__)
-app.config.setdefault("SQLALCHEMY_DATABASE_URI", "sqlite:///altaiglobal.db")
-app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altaiglobal.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 _SAFE_SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -33,7 +33,7 @@ def index():
     return render_template("index.html")
 
 
-def _parse_date(value: str | None) -> date | None:
+def _parse_iso_date(value: str | None) -> date | None:
     if not value:
         return None
     try:
@@ -70,9 +70,8 @@ def _remaining_goods_by_day(days: List[date]) -> Dict[date, float]:
 
     candidate_date_columns = ["updated_at", "created_at"]
     date_column = next((name for name in candidate_date_columns if name in columns), None)
-    if not _SAFE_SQL_IDENTIFIER.match(table_name) or not _SAFE_SQL_IDENTIFIER.match(remaining_column):
-        return {}
-    if date_column and not _SAFE_SQL_IDENTIFIER.match(date_column):
+    identifiers = [table_name, remaining_column] + ([date_column] if date_column else [])
+    if not all(_SAFE_SQL_IDENTIFIER.match(name) for name in identifiers):
         return {}
 
     if not date_column:
@@ -81,8 +80,6 @@ def _remaining_goods_by_day(days: List[date]) -> Dict[date, float]:
         ).scalar_one()
         return {day: float(total_remaining or 0) for day in days}
 
-    if not days:
-        return {}
     min_day = min(days).isoformat()
     max_day = max(days).isoformat()
     rows = db.session.execute(
@@ -101,8 +98,8 @@ def _remaining_goods_by_day(days: List[date]) -> Dict[date, float]:
 
 @app.route("/turnover")
 def turnover():
-    start_date = _parse_date(request.args.get("start_date"))
-    end_date = _parse_date(request.args.get("end_date"))
+    start_date = _parse_iso_date(request.args.get("start_date"))
+    end_date = _parse_iso_date(request.args.get("end_date"))
 
     sale_day = func.date(Sale.created_at)
     payment_type = func.lower(func.coalesce(Sale.payment_type, ""))
@@ -152,6 +149,7 @@ def turnover():
             rows_data.append(
                 {
                     "date": row_date,
+                    "date_label": row_date.strftime("%d.%m.%Y"),
                     "liters": liters,
                     "amount": amount,
                     "payments": payments,

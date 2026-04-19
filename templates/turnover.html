@@ -40,7 +40,7 @@
             <tbody>
                 {% for row in rows %}
                 <tr>
-                    <td><strong>{{ row.date.strftime('%d.%m.%Y') if row.date else '—' }}</strong></td>
+                    <td><strong>{{ row.date_label or '—' }}</strong></td>
                     <td>{{ '%.2f'|format(row.liters) }}</td>
                     <td>{{ '%.2f'|format(row.amount) }}</td>
                     <td>{{ '%.2f'|format(row.payments) }}</td>

@@ -143,6 +143,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isInvalid) {
             ts.wrapper.classList.add('is-invalid');
         }
+    } else {
+        selectEl.classList.add('form-select');
     }
 
     carNumberInput.addEventListener('input', validateCarNumber);

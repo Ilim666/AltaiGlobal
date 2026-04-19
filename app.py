@@ -1131,10 +1131,10 @@ def _build_cash_rows(start_date, end_date):
     )
     daily = {}
     for payment in all_payments:
-        date_key = payment.created_at.strftime("%d.%m.%Y")
+        date_key = payment.created_at.date()
         if date_key not in daily:
             daily[date_key] = {
-                "date": date_key,
+                "date": date_key.strftime("%d.%m.%Y"),
                 "sale_наличка": 0.0,
                 "sale_безнал": 0.0,
                 "sale_доллар": 0.0,
@@ -1149,7 +1149,7 @@ def _build_cash_rows(start_date, end_date):
             daily[date_key][f"debt_{method}"] += payment.amount
 
     rows = []
-    for data in daily.values():
+    for date_key, data in daily.items():
         row = dict(data)
         row["total_наличка"] = _format_number(row["sale_наличка"] + row["debt_наличка"])
         row["total_безнал"] = _format_number(row["sale_безнал"] + row["debt_безнал"])
@@ -1160,8 +1160,11 @@ def _build_cash_rows(start_date, end_date):
         row["debt_наличка"] = _format_number(row["debt_наличка"])
         row["debt_безнал"] = _format_number(row["debt_безнал"])
         row["debt_доллар"] = _format_number(row["debt_доллар"])
+        row["_sort_date"] = date_key
         rows.append(row)
-    rows.sort(key=lambda row: datetime.strptime(row["date"], "%d.%m.%Y"), reverse=True)
+    rows.sort(key=lambda row: row["_sort_date"], reverse=True)
+    for row in rows:
+        row.pop("_sort_date", None)
     return rows
 
 

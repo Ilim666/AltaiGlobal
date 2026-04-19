@@ -79,20 +79,41 @@ function hideError() {
 }
 
 function displayTable(data) {
-    const headers = (data.columns || []).map((col) => `<th>${col.label}</th>`).join("");
-    reportTable.querySelector("thead").innerHTML = `<tr>${headers}</tr>`;
+    const thead = reportTable.querySelector("thead");
+    const tbody = reportTable.querySelector("tbody");
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
 
-    const rows = (data.rows || []).map((row) => {
-        const tds = data.columns.map((col) => `<td>${row[col.key] ?? ""}</td>`).join("");
-        return `<tr>${tds}</tr>`;
+    const headRow = document.createElement("tr");
+    (data.columns || []).forEach((col) => {
+        const th = document.createElement("th");
+        th.textContent = col.label || "";
+        headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+
+    (data.rows || []).forEach((row) => {
+        const tr = document.createElement("tr");
+        (data.columns || []).forEach((col) => {
+            const td = document.createElement("td");
+            td.textContent = row[col.key] ?? "";
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
     });
 
     if (data.totals_row) {
-        const totalsCells = data.columns.map((col) => `<td><strong>${data.totals_row[col.key] ?? ""}</strong></td>`).join("");
-        rows.push(`<tr class="table-secondary">${totalsCells}</tr>`);
+        const totalsTr = document.createElement("tr");
+        totalsTr.className = "table-secondary";
+        (data.columns || []).forEach((col) => {
+            const td = document.createElement("td");
+            const strong = document.createElement("strong");
+            strong.textContent = data.totals_row[col.key] ?? "";
+            td.appendChild(strong);
+            totalsTr.appendChild(td);
+        });
+        tbody.appendChild(totalsTr);
     }
-
-    reportTable.querySelector("tbody").innerHTML = rows.join("");
 }
 
 showBtn.addEventListener("click", async () => {

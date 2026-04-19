@@ -768,7 +768,7 @@ def set_daily_stock():
 
     today = datetime.now(timezone.utc).date()
     daily_stock = _get_or_create_daily_stock(today)
-    daily_stock.current_stock = round(float(daily_stock.current_stock or 0) + liters, 2)
+    daily_stock.current_stock = round(float(daily_stock.current_stock) + liters, 2)
     db.session.add(StockHistory(stock_date=today, added_liters=liters))
     db.session.commit()
 
@@ -964,7 +964,7 @@ def sales():
             _ensure_daily_stock_tables()
             sale_date = datetime.now(timezone.utc).date()
             daily_stock = _get_or_create_daily_stock(sale_date)
-            daily_stock.current_stock = round(float(daily_stock.current_stock or 0) - liters, 2)
+            daily_stock.current_stock = round(float(daily_stock.current_stock) - liters, 2)
             db.session.commit()
             return redirect(url_for("sales_journal"))
 

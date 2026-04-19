@@ -142,6 +142,7 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    const RELOAD_DELAY_MS = 700;
     const applyBtn = document.getElementById("applyIncreaseStockBtn");
     const litersInput = document.getElementById("stockLitersInput");
     const errorBox = document.getElementById("increaseStockError");
@@ -209,7 +210,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (modal) {
                 modal.hide();
             }
-            setTimeout(() => window.location.reload(), 700);
+            setTimeout(() => window.location.reload(), RELOAD_DELAY_MS);
         } catch (e) {
             showError("Ошибка сети. Попробуйте снова.");
         } finally {

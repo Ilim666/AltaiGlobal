@@ -3,7 +3,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">🚗 Машины</h2>
+    {% if session.get('role') == 'admin' %}
     <a href="/add-car" class="btn btn-primary">➕ Добавить машину</a>
+    {% endif %}
 </div>
 
 <form method="get" action="/cars" class="mb-4">
@@ -49,12 +51,14 @@
                 <td>{{ car.note or '—' }}</td>
                 <td>{{ car.created_at.strftime('%d.%m.%Y') }}</td>
                 <td>
+                    {% if session.get('role') == 'admin' %}
                     <a href="/edit-car/{{ car.id }}" class="btn btn-sm btn-outline-warning" title="Редактировать">✏️</a>
                     <form method="post" action="/delete-car/{{ car.id }}" class="d-inline"
                           onsubmit="return confirm('Удалить машину {{ car.number }}?')">
                         <input type="hidden" name="next" value="cars">
                         <button class="btn btn-sm btn-outline-danger" title="Удалить">🗑</button>
                     </form>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -67,7 +71,10 @@
     {% if q %}
     По запросу «{{ q }}» машин не найдено. <a href="/cars">Показать все</a>.
     {% else %}
-    Машин пока нет. <a href="/add-car">Добавить первую</a>.
+    Машин пока нет.
+    {% if session.get('role') == 'admin' %}
+    <a href="/add-car">Добавить первую</a>.
+    {% endif %}
     {% endif %}
 </div>
 {% endif %}

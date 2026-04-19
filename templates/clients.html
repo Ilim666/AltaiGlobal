@@ -3,7 +3,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">👥 Клиенты</h2>
+    {% if session.get('role') == 'admin' %}
     <a href="/add-client" class="btn btn-primary">➕ Добавить клиента</a>
+    {% endif %}
 </div>
 
 {% if clients %}
@@ -32,11 +34,13 @@
                 <td>{{ c.created_at.strftime('%d.%m.%Y') }}</td>
                 <td onclick="event.stopPropagation()">
                     <a href="/client/{{ c.id }}" class="btn btn-sm btn-outline-info" title="Детали">👁</a>
+                    {% if session.get('role') == 'admin' %}
                     <a href="/edit-client/{{ c.id }}" class="btn btn-sm btn-outline-warning" title="Редактировать">✏️</a>
                     <form method="post" action="/delete-client/{{ c.id }}" class="d-inline"
                           onsubmit="return confirm('Удалить клиента и все его машины?')">
                         <button class="btn btn-sm btn-outline-danger" title="Удалить">🗑</button>
                     </form>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -45,6 +49,11 @@
     </div>
 </div>
 {% else %}
-<div class="alert alert-info">Клиентов пока нет. <a href="/add-client">Добавить первого</a>.</div>
+<div class="alert alert-info">
+    Клиентов пока нет.
+    {% if session.get('role') == 'admin' %}
+    <a href="/add-client">Добавить первого</a>.
+    {% endif %}
+</div>
 {% endif %}
 {% endblock %}

@@ -411,7 +411,7 @@ def check_phone():
     exists = False
     if is_valid:
         query = Client.query.filter_by(phone=digits)
-        if client_id not in (None, ""):
+        if client_id is not None and client_id != "":
             try:
                 query = query.filter(Client.id != int(client_id))
             except (TypeError, ValueError):
@@ -436,7 +436,7 @@ def check_inn():
     exists = False
     if is_valid:
         query = Client.query.filter_by(inn=digits)
-        if client_id not in (None, ""):
+        if client_id is not None and client_id != "":
             try:
                 query = query.filter(Client.id != int(client_id))
             except (TypeError, ValueError):
@@ -455,7 +455,7 @@ def check_car_number():
         return jsonify({"exists": False})
 
     query = Car.query.filter_by(number=car_number)
-    if car_id not in (None, ""):
+    if car_id is not None and car_id != "":
         try:
             query = query.filter(Car.id != int(car_id))
         except (TypeError, ValueError):

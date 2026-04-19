@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
-    if (window.TomSelect) {
+    if (typeof TomSelect !== 'undefined') {
         var isInvalid = selectEl.classList.contains('is-invalid');
         var ts = new TomSelect(selectEl, {
             placeholder: '— Выберите клиента —',

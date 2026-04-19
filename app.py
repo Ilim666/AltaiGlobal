@@ -77,7 +77,7 @@ PAYMENT_METHODS = ["наличка", "безнал", "доллар", "долг"]
 class Sale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     car_id = db.Column(db.Integer, db.ForeignKey("car.id"), nullable=False)
-    liters = db.Column(db.Float, nullable=False)
+    liters = db.Column(db.Numeric(10, 2), nullable=False)
     price_per_liter = db.Column(db.Numeric(10, 2), nullable=False)
     total = db.Column(db.Numeric(10, 2), nullable=False)
     payment_method = db.Column(db.String(20), nullable=False)
@@ -92,7 +92,7 @@ class Sale(db.Model):
 class Receipt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     car_id = db.Column(db.Integer, db.ForeignKey("car.id"), nullable=False)
-    liters = db.Column(db.Float, nullable=False)
+    liters = db.Column(db.Numeric(10, 2), nullable=False)
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     notes = db.Column(db.Text, nullable=True)
@@ -351,6 +351,149 @@ def _ensure_sale_payment_user_columns():
             db.session.commit()
 
 
+def _ensure_liters_numeric_columns():
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+
+    def _needs_numeric_migration(table_name):
+        column = next(
+            (col for col in inspector.get_columns(table_name) if col["name"] == "liters"),
+            None,
+        )
+        if not column:
+            return False
+        column_type = str(column["type"]).lower()
+        return "float" in column_type or "real" in column_type or "double" in column_type
+
+    def _sqlite_copy_sale_to_numeric():
+        sale_columns = {column["name"] for column in inspector.get_columns("sale")}
+        if "created_by" not in sale_columns:
+            db.session.execute(text("ALTER TABLE sale ADD COLUMN created_by INTEGER"))
+        if "note" not in sale_columns:
+            db.session.execute(text("ALTER TABLE sale ADD COLUMN note TEXT"))
+        if "created_at" not in sale_columns:
+            db.session.execute(text("ALTER TABLE sale ADD COLUMN created_at DATETIME"))
+
+        db.session.execute(text("DROP TABLE IF EXISTS sale__tmp"))
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE sale__tmp (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    car_id INTEGER NOT NULL,
+                    liters NUMERIC(10, 2) NOT NULL,
+                    price_per_liter NUMERIC(10, 2) NOT NULL,
+                    total NUMERIC(10, 2) NOT NULL,
+                    payment_method VARCHAR(20) NOT NULL,
+                    payment_amount NUMERIC(10, 2),
+                    created_by INTEGER,
+                    note TEXT,
+                    created_at DATETIME,
+                    FOREIGN KEY(car_id) REFERENCES car (id),
+                    FOREIGN KEY(created_by) REFERENCES user (id)
+                )
+                """
+            )
+        )
+        db.session.execute(
+            text(
+                """
+                INSERT INTO sale__tmp
+                    (id, car_id, liters, price_per_liter, total, payment_method, payment_amount, created_by, note, created_at)
+                SELECT
+                    id,
+                    car_id,
+                    CAST(liters AS NUMERIC),
+                    price_per_liter,
+                    total,
+                    payment_method,
+                    payment_amount,
+                    created_by,
+                    note,
+                    created_at
+                FROM sale
+                """
+            )
+        )
+        db.session.execute(text("DROP TABLE sale"))
+        db.session.execute(text("ALTER TABLE sale__tmp RENAME TO sale"))
+
+    def _sqlite_copy_receipt_to_numeric():
+        receipt_columns = {column["name"] for column in inspector.get_columns("receipt")}
+        if "created_at" not in receipt_columns:
+            db.session.execute(text("ALTER TABLE receipt ADD COLUMN created_at DATETIME"))
+        if "notes" not in receipt_columns:
+            db.session.execute(text("ALTER TABLE receipt ADD COLUMN notes TEXT"))
+
+        db.session.execute(text("DROP TABLE IF EXISTS receipt__tmp"))
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE receipt__tmp (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    car_id INTEGER NOT NULL,
+                    liters NUMERIC(10, 2) NOT NULL,
+                    amount NUMERIC(10, 2) NOT NULL,
+                    created_at DATETIME,
+                    notes TEXT,
+                    FOREIGN KEY(car_id) REFERENCES car (id)
+                )
+                """
+            )
+        )
+        db.session.execute(
+            text(
+                """
+                INSERT INTO receipt__tmp (id, car_id, liters, amount, created_at, notes)
+                SELECT
+                    id,
+                    car_id,
+                    CAST(liters AS NUMERIC),
+                    amount,
+                    created_at,
+                    notes
+                FROM receipt
+                """
+            )
+        )
+        db.session.execute(text("DROP TABLE receipt"))
+        db.session.execute(text("ALTER TABLE receipt__tmp RENAME TO receipt"))
+
+    sale_needs_migration = "sale" in table_names and _needs_numeric_migration("sale")
+    receipt_needs_migration = "receipt" in table_names and _needs_numeric_migration("receipt")
+    if not sale_needs_migration and not receipt_needs_migration:
+        return
+
+    if db.engine.dialect.name == "sqlite":
+        db.session.execute(text("PRAGMA foreign_keys=OFF"))
+        migration_step = "initialization"
+        try:
+            if sale_needs_migration:
+                migration_step = "sale.liters"
+                _sqlite_copy_sale_to_numeric()
+                db.session.commit()
+            if receipt_needs_migration:
+                migration_step = "receipt.liters"
+                _sqlite_copy_receipt_to_numeric()
+                db.session.commit()
+        except SQLAlchemyError as exc:
+            db.session.rollback()
+            raise RuntimeError(f"Failed to migrate {migration_step} column to NUMERIC(10, 2).") from exc
+        finally:
+            db.session.execute(text("PRAGMA foreign_keys=ON"))
+            db.session.commit()
+    else:
+        if sale_needs_migration:
+            db.session.execute(
+                text("ALTER TABLE sale ALTER COLUMN liters TYPE NUMERIC(10, 2)")
+            )
+        if receipt_needs_migration:
+            db.session.execute(
+                text("ALTER TABLE receipt ALTER COLUMN liters TYPE NUMERIC(10, 2)")
+            )
+        db.session.commit()
+
+
 def _get_or_create_daily_stock(stock_date):
     daily_stock = DailyStock.query.filter_by(stock_date=stock_date).first()
     if daily_stock:
@@ -561,7 +704,7 @@ def add_client():
 
 
 @app.route("/client/<int:id>")
-@admin_required
+@login_required
 def client_detail(id):
     client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
     cars = Car.query.filter_by(client_id=id, is_deleted=False).order_by(Car.id.desc()).all()
@@ -1696,6 +1839,7 @@ if __name__ == "__main__":
         _ensure_daily_stock_tables()
         _ensure_client_car_soft_delete()
         _ensure_sale_payment_user_columns()
+        _ensure_liters_numeric_columns()
 
         legacy_users = User.query.all()
         for legacy_user in legacy_users:

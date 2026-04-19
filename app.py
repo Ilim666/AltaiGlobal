@@ -1,11 +1,13 @@
 import re
 import os
+import secrets
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from functools import wraps
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy import case, func, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
@@ -13,7 +15,7 @@ from sqlalchemy.orm import joinedload
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or os.urandom(32).hex()
 db = SQLAlchemy(app)
 
 
@@ -113,6 +115,13 @@ def admin_required(f):
     return decorated_function
 
 
+def verify_user_password(user, password):
+    stored_password = user.password or ""
+    if stored_password.startswith(("pbkdf2:", "scrypt:")):
+        return check_password_hash(stored_password, password)
+    return stored_password == password
+
+
 def validate_phone(phone):
     digits = re.sub(r"\D", "", phone)
     return digits if len(digits) == 10 else None
@@ -186,19 +195,28 @@ def login():
         return redirect(url_for("index"))
 
     if request.method == "POST":
+        csrf_token = request.form.get("csrf_token", "")
+        if not csrf_token or csrf_token != session.get("csrf_token"):
+            return render_template("login.html", error="Сессия истекла. Повторите вход.")
+
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
 
         user = User.query.filter_by(username=username).first()
-        if user and user.password == password:
+        if user and verify_user_password(user, password):
+            if not user.password.startswith(("pbkdf2:", "scrypt:")):
+                user.password = generate_password_hash(password)
+                db.session.commit()
             session["user_id"] = user.id
             session["username"] = user.username
             session["role"] = user.role
+            session.pop("csrf_token", None)
             return redirect(url_for("index"))
 
         error = "Неверное имя пользователя или пароль"
         return render_template("login.html", error=error)
 
+    session["csrf_token"] = secrets.token_urlsafe(32)
     return render_template("login.html")
 
 
@@ -217,11 +235,8 @@ def index():
 
 
 @app.route("/clients")
-@login_required
+@admin_required
 def clients():
-    if session.get("role") != "admin":
-        return redirect(url_for("index"))
-
     all_clients = Client.query.order_by(Client.id.desc()).all()
     return render_template("clients.html", clients=all_clients)
 
@@ -926,11 +941,11 @@ if __name__ == "__main__":
         db.create_all()
 
         if not User.query.filter_by(username="admin").first():
-            admin = User(username="admin", password="admin123", role="admin")
+            admin = User(username="admin", password=generate_password_hash("admin123"), role="admin")
             db.session.add(admin)
 
         if not User.query.filter_by(username="operator").first():
-            operator = User(username="operator", password="operator123", role="operator")
+            operator = User(username="operator", password=generate_password_hash("operator123"), role="operator")
             db.session.add(operator)
 
         db.session.commit()

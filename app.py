@@ -4,9 +4,10 @@ import secrets
 from io import BytesIO
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 from functools import wraps
 
+import pytz
 from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from openpyxl import Workbook
@@ -22,6 +23,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 db = SQLAlchemy(app)
+TZ = pytz.timezone(os.getenv("TZ", "Asia/Almaty"))
 
 
 def fmt_phone(phone):
@@ -42,7 +44,7 @@ class User(db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="operator")
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
 
 
 class Client(db.Model):
@@ -52,7 +54,7 @@ class Client(db.Model):
     inn = db.Column(db.String(14), nullable=False)
     is_deleted = db.Column(db.Boolean, default=False, server_default=text("0"), nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     cars = db.relationship("Car", backref="client", lazy=True)
 
 
@@ -66,7 +68,7 @@ class Car(db.Model):
     stock = db.Column(db.Numeric(10, 2), default=0)
     is_deleted = db.Column(db.Boolean, default=False, server_default=text("0"), nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     sales = db.relationship("Sale", backref="car", lazy=True)
     receipts = db.relationship("Receipt", backref="car", lazy=True)
 
@@ -84,7 +86,7 @@ class Sale(db.Model):
     payment_amount = db.Column(db.Numeric(10, 2), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     note = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     payments = db.relationship("Payment", backref="sale", lazy=True, cascade="all, delete-orphan")
     created_by_user = db.relationship("User", foreign_keys=[created_by], lazy="joined")
 
@@ -94,7 +96,7 @@ class Receipt(db.Model):
     car_id = db.Column(db.Integer, db.ForeignKey("car.id"), nullable=False)
     liters = db.Column(db.Numeric(10, 2), nullable=False)
     amount = db.Column(db.Numeric(10, 2), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     notes = db.Column(db.Text, nullable=True)
 
 
@@ -102,14 +104,14 @@ class DailyStock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     stock_date = db.Column(db.Date, nullable=False, unique=True)
     current_stock = db.Column(db.Numeric(10, 2), default=0)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
 
 
 class StockHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     stock_date = db.Column(db.Date, nullable=False)
     added_liters = db.Column(db.Numeric(10, 2), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
 
 
 PAYMENT_TYPES = ["продажа", "долг"]
@@ -135,7 +137,7 @@ class Payment(db.Model):
     )
     payment_method = db.Column(db.String(20), nullable=True)
     paid_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     client = db.relationship("Client", backref=db.backref("payments", lazy=True))
     paid_by_user = db.relationship("User", foreign_keys=[paid_by], lazy="joined")
 
@@ -210,7 +212,7 @@ def _parse_month_value(month_value):
 def _month_bounds(month_value=None):
     month_start = _parse_month_value(month_value)
     if not month_start:
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(TZ).date()
         month_start = today.replace(day=1)
     next_month_start = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     month_end = next_month_start - timedelta(days=1)
@@ -763,7 +765,7 @@ def edit_client(id):
 @admin_required
 def delete_client(id):
     client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
-    deleted_at = datetime.now(timezone.utc)
+    deleted_at = datetime.now(TZ)
     client.is_deleted = True
     client.deleted_at = deleted_at
     for car in Car.query.filter_by(client_id=client.id, is_deleted=False).all():
@@ -889,7 +891,7 @@ def delete_car(id):
     client_id = car.client_id
     next_page = request.form.get("next", "")
     car.is_deleted = True
-    car.deleted_at = datetime.now(timezone.utc)
+    car.deleted_at = datetime.now(TZ)
     db.session.commit()
     if next_page == "cars":
         return redirect(url_for("cars"))
@@ -992,7 +994,7 @@ def set_daily_stock():
     except (TypeError, ValueError, InvalidOperation):
         return jsonify({"ok": False, "error": "Количество литров должно быть больше 0."}), 400
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(TZ).date()
     daily_stock = _get_or_create_daily_stock(today)
     liters = _to_decimal_2(liters)
     daily_stock.current_stock = _to_decimal_2(daily_stock.current_stock or 0) + liters
@@ -1215,7 +1217,7 @@ def sales():
                 )
                 db.session.add(payment)
             _ensure_daily_stock_tables()
-            sale_date = datetime.now(timezone.utc).date()
+            sale_date = datetime.now(TZ).date()
             daily_stock = _get_or_create_daily_stock(sale_date)
             daily_stock.current_stock = _to_decimal_2(
                 _to_decimal_2(daily_stock.current_stock or 0) - _to_decimal_2(liters)

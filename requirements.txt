@@ -2,3 +2,6 @@ Flask==2.3.0
 Flask-SQLAlchemy==3.0.0
 openpyxl>=3.0
 pytz>=2024.1
+
+gunicorn>=21.1
+

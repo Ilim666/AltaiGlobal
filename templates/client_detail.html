@@ -10,7 +10,9 @@
 <div class="card shadow-sm mb-4">
     <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
         <span>Данные клиента</span>
+        {% if session.get('role') == 'admin' %}
         <a href="/edit-client/{{ client.id }}" class="btn btn-sm btn-light">✏️ Редактировать</a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="row">
@@ -27,19 +29,23 @@
                 <p class="fw-semibold">{{ client.inn }}</p>
             </div>
         </div>
+        {% if session.get('role') == 'admin' %}
         <div class="text-end mt-2">
             <form method="post" action="/delete-client/{{ client.id }}" class="d-inline"
                   onsubmit="return confirm('Удалить клиента и все его машины?')">
                 <button class="btn btn-sm btn-outline-danger">🗑 Удалить клиента</button>
             </form>
         </div>
+        {% endif %}
     </div>
 </div>
 
 <!-- Cars -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0">🚗 Машины ({{ cars|length }})</h4>
+    {% if session.get('role') == 'admin' %}
     <a href="/add-car?client_id={{ client.id }}" class="btn btn-success btn-sm">➕ Добавить машину</a>
+    {% endif %}
 </div>
 
 {% if cars %}
@@ -65,11 +71,13 @@
                 <td>{{ car.note or '—' }}</td>
                 <td>{{ car.created_at.strftime('%d.%m.%Y') }}</td>
                 <td>
+                    {% if session.get('role') == 'admin' %}
                     <a href="/edit-car/{{ car.id }}" class="btn btn-sm btn-outline-warning">✏️</a>
                     <form method="post" action="/delete-car/{{ car.id }}" class="d-inline"
                           onsubmit="return confirm('Удалить машину {{ car.number }}?')">
                         <button class="btn btn-sm btn-outline-danger">🗑</button>
                     </form>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -79,7 +87,10 @@
 </div>
 {% else %}
 <div class="alert alert-secondary">
-    У этого клиента пока нет машин. <a href="/add-car?client_id={{ client.id }}">Добавить машину</a>.
+    У этого клиента пока нет машин.
+    {% if session.get('role') == 'admin' %}
+    <a href="/add-car?client_id={{ client.id }}">Добавить машину</a>.
+    {% endif %}
 </div>
 {% endif %}
 {% endblock %}

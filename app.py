@@ -15,26 +15,7 @@ from sqlalchemy.orm import joinedload
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///altai.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-
-def _get_secret_key():
-    env_secret = os.getenv("SECRET_KEY")
-    if env_secret:
-        return env_secret
-
-    os.makedirs(app.instance_path, exist_ok=True)
-    secret_path = os.path.join(app.instance_path, ".secret_key")
-    if os.path.exists(secret_path):
-        with open(secret_path, "r", encoding="utf-8") as f:
-            return f.read().strip()
-
-    secret = secrets.token_hex(32)
-    with open(secret_path, "w", encoding="utf-8") as f:
-        f.write(secret)
-    return secret
-
-
-app.config["SECRET_KEY"] = _get_secret_key()
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 db = SQLAlchemy(app)
 
 
@@ -135,7 +116,9 @@ def admin_required(f):
 
 
 def verify_user_password(user, password):
-    return check_password_hash(user.password or "", password)
+    if not user.password:
+        return False
+    return check_password_hash(user.password, password)
 
 
 def validate_phone(phone):
@@ -212,7 +195,7 @@ def login():
 
     if request.method == "POST":
         csrf_token = request.form.get("csrf_token", "")
-        if not csrf_token or csrf_token != session.get("csrf_token"):
+        if not csrf_token or not secrets.compare_digest(csrf_token, session.get("csrf_token", "")):
             return render_template("login.html", error="Сессия истекла. Повторите вход.")
 
         username = request.form.get("username", "").strip()
@@ -220,9 +203,6 @@ def login():
 
         user = User.query.filter_by(username=username).first()
         if user and verify_user_password(user, password):
-            if not user.password.startswith(("pbkdf2:", "scrypt:")):
-                user.password = generate_password_hash(password)
-                db.session.commit()
             session["user_id"] = user.id
             session["username"] = user.username
             session["role"] = user.role

@@ -1,4 +1,5 @@
 import re
+import os
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -664,7 +665,6 @@ def cash():
 def turnover():
     start_date = _parse_iso_date(request.args.get("start_date"))
     end_date = _parse_iso_date(request.args.get("end_date"))
-    q = request.args.get("q", "").strip()
 
     sale_day = func.date(Sale.created_at)
     payment_method = func.lower(func.coalesce(Sale.payment_method, ""))
@@ -743,11 +743,10 @@ def turnover():
         error_message=error_message,
         start_date=start_date.isoformat() if start_date else "",
         end_date=end_date.isoformat() if end_date else "",
-        q=q,
     )
 
 
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG", "False") == "True")

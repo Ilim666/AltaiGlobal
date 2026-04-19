@@ -32,6 +32,7 @@
                     <th>Сумма</th>
                     <th>Сумма оплаты</th>
                     <th>Способ оплаты</th>
+                    <th>Оператор</th>
                     <th>Остаток суммы</th>
                     <th>Дата и время оплаты</th>
                 </tr>
@@ -69,6 +70,7 @@
                         —
                     {% endif %}
                 </td>
+                <td>{{ p.paid_by_user.username if p.paid_by_user else '—' }}</td>
                 <td class="{{ 'table-success' if remaining <= 0 else 'table-danger' }}">
                     <strong>{{ "%.2f"|format(remaining) }}</strong>
                 </td>

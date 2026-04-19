@@ -77,9 +77,11 @@ class Sale(db.Model):
     total = db.Column(db.Float, nullable=False)
     payment_method = db.Column(db.String(20), nullable=False)
     payment_amount = db.Column(db.Float, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     note = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     payments = db.relationship("Payment", backref="sale", lazy=True, cascade="all, delete-orphan")
+    created_by_user = db.relationship("User", foreign_keys=[created_by], lazy="joined")
 
 
 class Receipt(db.Model):
@@ -127,8 +129,10 @@ class Payment(db.Model):
         nullable=False,
     )
     payment_method = db.Column(db.String(20), nullable=True)
+    paid_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     client = db.relationship("Client", backref=db.backref("payments", lazy=True))
+    paid_by_user = db.relationship("User", foreign_keys=[paid_by], lazy="joined")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -301,6 +305,21 @@ def _ensure_daily_stock_tables():
         StockHistory.__table__.create(bind=db.engine, checkfirst=True)
 
 
+def _ensure_sale_payment_user_columns():
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    if "sale" in table_names:
+        sale_columns = {column["name"] for column in inspector.get_columns("sale")}
+        if "created_by" not in sale_columns:
+            db.session.execute(text("ALTER TABLE sale ADD COLUMN created_by INTEGER"))
+            db.session.commit()
+    if "payment" in table_names:
+        payment_columns = {column["name"] for column in inspector.get_columns("payment")}
+        if "paid_by" not in payment_columns:
+            db.session.execute(text("ALTER TABLE payment ADD COLUMN paid_by INTEGER"))
+            db.session.commit()
+
+
 def _get_or_create_daily_stock(stock_date):
     daily_stock = DailyStock.query.filter_by(stock_date=stock_date).first()
     if daily_stock:
@@ -364,7 +383,7 @@ def index():
 
 
 @app.route("/clients")
-@admin_required
+@login_required
 def clients():
     all_clients = Client.query.order_by(Client.id.desc()).all()
     return render_template("clients.html", clients=all_clients)
@@ -659,7 +678,7 @@ def edit_car(id):
 
 
 @app.route("/cars")
-@admin_required
+@login_required
 def cars():
     q = request.args.get("q", "").strip()
     query = Car.query.options(joinedload(Car.client)).join(Car.client)
@@ -998,6 +1017,7 @@ def sales():
                 total=total,
                 payment_method=form["payment_method"],
                 payment_amount=payment_amount,
+                created_by=session.get("user_id"),
                 note=form["note"] or None,
             )
             db.session.add(sale)
@@ -1009,6 +1029,7 @@ def sales():
                     amount=payment_amount,
                     payment_type="продажа",
                     payment_method=form["payment_method"],
+                    paid_by=session.get("user_id"),
                 )
                 db.session.add(payment)
             _ensure_daily_stock_tables()
@@ -1394,7 +1415,7 @@ def sales_journal():
     q = request.args.get("q", "").strip()
     query = (
         Sale.query
-        .options(joinedload(Sale.car).joinedload(Car.client))
+        .options(joinedload(Sale.car).joinedload(Car.client), joinedload(Sale.created_by_user))
         .join(Sale.car)
         .join(Car.client)
         .filter(Sale.created_at >= start_dt, Sale.created_at < end_dt)
@@ -1515,6 +1536,7 @@ def pay_debt(sale_id):
         amount=amount,
         payment_type="долг",
         payment_method=payment_method,
+        paid_by=session.get("user_id"),
     )
     db.session.add(payment)
     db.session.commit()
@@ -1529,6 +1551,7 @@ def payments():
     q = request.args.get("q", "").strip()
     query = (
         Payment.query
+        .options(joinedload(Payment.paid_by_user))
         .join(Payment.client)
         .filter(Payment.created_at >= start_dt, Payment.created_at < end_dt)
         .order_by(Payment.created_at.desc())
@@ -1621,6 +1644,7 @@ if __name__ == "__main__":
         db.create_all()
         _ensure_car_stock_column()
         _ensure_daily_stock_tables()
+        _ensure_sale_payment_user_columns()
 
         legacy_users = User.query.all()
         for legacy_user in legacy_users:

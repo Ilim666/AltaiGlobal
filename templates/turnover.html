@@ -1,8 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Оборот — AltaiGlobal{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 gap-2">
     <h2 class="mb-0">📊 Оборот</h2>
+    {% if session.get("role") == "admin" %}
+    <button
+        type="button"
+        class="btn btn-success"
+        data-bs-toggle="modal"
+        data-bs-target="#increaseStockModal"
+    >
+        ⬆️ Увеличить остаток
+    </button>
+    {% endif %}
 </div>
 <div id="increaseStockSuccess" class="alert alert-success d-none" role="alert"></div>
 
@@ -42,13 +52,13 @@
             <thead class="table-dark">
                 <tr>
                     <th>Дата</th>
-                    <th>Машина</th>
                     <th>Литр</th>
                     <th>Сумма</th>
                     <th>Оплаты</th>
                     <th>Долги</th>
                     <th>Средняя цена</th>
                     <th>Остаток товара</th>
+                    <th>Поступление</th>
                 </tr>
             </thead>
             <tbody>
@@ -59,6 +69,7 @@
                 {% set debts = row.debts|float if row.debts is defined else 0 %}
                 {% set avg_price = row.avg_price|float if row.avg_price is defined else ((row.average_price|float) if row.average_price is defined else 0) %}
                 {% set stock = row.remaining_goods if row.remaining_goods is defined else (row.stock if row.stock is defined else 0) %}
+                {% set added_liters = row.added_liters|float if row.added_liters is defined else 0 %}
                 {% set ns.total_liters = ns.total_liters + liters %}
                 {% set ns.total_amount = ns.total_amount + amount %}
                 {% set ns.total_payments = ns.total_payments + payments %}
@@ -68,51 +79,29 @@
                         {% if row.date is string %}
                             {{ row.date }}
                         {% elif row.date %}
-                            {{ row.date.strftime('%d.%m.%Y %H:%M') }}
+                            {{ row.date.strftime('%d.%m.%Y') }}
                         {% else %}
                             —
                         {% endif %}
                     </td>
-                    <td>{{ row.car_label if row.car_label is defined else "—" }}</td>
                     <td>{{ "%.2f"|format(liters) }}</td>
                     <td>{{ "%.2f"|format(amount) }}</td>
                     <td>{{ "%.2f"|format(payments) }}</td>
                     <td><span class="text-danger fw-semibold">{{ "%.2f"|format(debts) }}</span></td>
                     <td>{{ "%.2f"|format(avg_price) }}</td>
-                    <td
-                        data-stock-cell
-                        data-car-id="{{ row.car_id if row.car_id is defined else '' }}"
-                        data-row-liters="{{ liters }}"
-                    >
-                        {% if stock is number %}
-                            <span data-stock-value>{{ "%.2f"|format(stock|float) }}</span>
-                        {% else %}
-                            <span data-stock-value>{{ stock }}</span>
-                        {% endif %}
-                        {% if session.get("role") == "admin" and row.car_id is defined %}
-                        <button
-                            type="button"
-                            class="btn btn-sm btn-success ms-2 increase-stock-btn"
-                            data-bs-toggle="modal"
-                            data-bs-target="#increaseStockModal"
-                            data-car-id="{{ row.car_id }}"
-                            data-car-label="{{ row.car_label if row.car_label is defined else '' }}"
-                        >
-                            ➕ Увеличить
-                        </button>
-                        {% endif %}
-                    </td>
+                    <td>{{ "%.2f"|format(stock|float) }}</td>
+                    <td>{{ "%.2f"|format(added_liters) }}</td>
                 </tr>
             {% endfor %}
             </tbody>
             <tfoot>
                 <tr class="table-light fw-bold">
                     <td>ИТОГО</td>
-                    <td>—</td>
                     <td>{{ "%.2f"|format(ns.total_liters) }}</td>
                     <td>{{ "%.2f"|format(ns.total_amount) }}</td>
                     <td>{{ "%.2f"|format(ns.total_payments) }}</td>
                     <td class="text-danger">{{ "%.2f"|format(ns.total_debts) }}</td>
+                    <td>—</td>
                     <td>—</td>
                     <td>—</td>
                 </tr>
@@ -136,9 +125,8 @@
             </div>
             <div class="modal-body">
                 <div id="increaseStockError" class="alert alert-danger d-none" role="alert"></div>
-                <div id="increaseStockCarInfo" class="text-muted small mb-2"></div>
                 <div class="mb-1">
-                    <label for="stockLitersInput" class="form-label">Литры</label>
+                    <label for="stockLitersInput" class="form-label">Количество литров</label>
                     <input id="stockLitersInput" type="number" step="0.01" min="0.01" class="form-control">
                 </div>
             </div>
@@ -154,16 +142,12 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const DEFAULT_INCREASE_LITERS = 5000;
     const applyBtn = document.getElementById("applyIncreaseStockBtn");
-    const stockButtons = document.querySelectorAll(".increase-stock-btn");
     const litersInput = document.getElementById("stockLitersInput");
-    const carInfo = document.getElementById("increaseStockCarInfo");
     const errorBox = document.getElementById("increaseStockError");
     const successBox = document.getElementById("increaseStockSuccess");
     const modalEl = document.getElementById("increaseStockModal");
     const modal = window.bootstrap ? window.bootstrap.Modal.getOrCreateInstance(modalEl) : null;
-    let selectedCarId = null;
     let successTimer = null;
 
     function showError(message) {
@@ -189,22 +173,12 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 3000);
     }
 
-    stockButtons.forEach((button) => {
-        button.addEventListener("click", function () {
-            hideError();
-            const parsedCarId = Number(button.dataset.carId);
-            selectedCarId = Number.isFinite(parsedCarId) && parsedCarId > 0 ? parsedCarId : null;
-            if (carInfo) {
-                carInfo.textContent = button.dataset.carLabel ? `Машина: ${button.dataset.carLabel}` : "";
-            }
-            litersInput.value = String(DEFAULT_INCREASE_LITERS);
+    if (modalEl) {
+        modalEl.addEventListener("shown.bs.modal", function () {
+            litersInput.value = "";
             litersInput.focus();
         });
-    });
-
-    if (modalEl) {
         modalEl.addEventListener("hidden.bs.modal", function () {
-            selectedCarId = null;
             hideError();
         });
     }
@@ -213,10 +187,6 @@ document.addEventListener("DOMContentLoaded", function () {
         hideError();
         const liters = parseFloat(litersInput.value);
 
-        if (!selectedCarId) {
-            showError("Не выбрана машина для увеличения остатка.");
-            return;
-        }
         if (!Number.isFinite(liters) || liters <= 0) {
             showError("Введите количество литров больше 0.");
             return;
@@ -224,32 +194,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
         applyBtn.disabled = true;
         try {
-            const response = await fetch("/api/increase-stock", {
+            const response = await fetch("/api/set-daily-stock", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ car_id: selectedCarId, liters: liters })
+                body: JSON.stringify({ liters: liters })
             });
-            const data = await response.json();
+            const data = await response.json().catch(() => ({}));
             if (!response.ok || !data.ok) {
                 showError(data.error || "Не удалось увеличить остаток.");
                 return;
             }
 
-            document.querySelectorAll("[data-stock-cell]").forEach((cell) => {
-                const cellCarId = Number(cell.dataset.carId);
-                if (!Number.isFinite(cellCarId) || cellCarId !== selectedCarId) return;
-                const valueEl = cell.querySelector("[data-stock-value]");
-                if (!valueEl) return;
-                const rowLiters = parseFloat(cell.dataset.rowLiters || "");
-                const currentStock = parseFloat(data.stock);
-                if (!Number.isFinite(rowLiters) || !Number.isFinite(currentStock)) return;
-                valueEl.textContent = (currentStock - rowLiters).toFixed(2);
-            });
-
             showSuccess("Остаток успешно увеличен.");
             if (modal) {
                 modal.hide();
             }
+            setTimeout(() => window.location.reload(), 700);
         } catch (e) {
             showError("Ошибка сети. Попробуйте снова.");
         } finally {

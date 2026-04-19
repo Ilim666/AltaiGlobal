@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 import re
 from typing import Dict, List
@@ -113,9 +113,9 @@ def turnover():
     )
 
     if start_date:
-        query = query.filter(sale_day >= start_date.isoformat())
+        query = query.filter(Sale.created_at >= datetime.combine(start_date, time.min))
     if end_date:
-        query = query.filter(sale_day <= end_date.isoformat())
+        query = query.filter(Sale.created_at < datetime.combine(end_date + timedelta(days=1), time.min))
 
     rows_data = []
     totals = {
@@ -125,16 +125,18 @@ def turnover():
         "debts": 0.0,
         "average_price": 0.0,
     }
+    error_message = None
 
     try:
         grouped_rows = query.group_by(sale_day).order_by(sale_day.desc()).all()
-        dates = [datetime.strptime(row.sale_date, "%Y-%m-%d").date() for row in grouped_rows if row.sale_date]
-        remainder_map = _remaining_goods_by_day(dates)
+        rows_with_dates = [
+            (row, datetime.strptime(row.sale_date, "%Y-%m-%d").date())
+            for row in grouped_rows
+            if row.sale_date
+        ]
+        remainder_map = _remaining_goods_by_day([row_date for _, row_date in rows_with_dates])
 
-        for row in grouped_rows:
-            if not row.sale_date:
-                continue
-            row_date = datetime.strptime(row.sale_date, "%Y-%m-%d").date()
+        for row, row_date in rows_with_dates:
             liters = _to_float(row.liters)
             amount = _to_float(row.amount)
             payments = _to_float(row.payments)
@@ -167,11 +169,13 @@ def turnover():
             end_date.isoformat() if end_date else "any",
         )
         rows_data = []
+        error_message = "Не удалось загрузить данные оборота. Проверьте подключение к базе данных."
 
     return render_template(
         "turnover.html",
         rows=rows_data,
         totals=totals,
+        error_message=error_message,
         start_date=start_date.isoformat() if start_date else "",
         end_date=end_date.isoformat() if end_date else "",
     )

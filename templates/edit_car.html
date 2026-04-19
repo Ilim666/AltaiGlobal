@@ -13,13 +13,15 @@
                 <h5 class="mb-0">Данные машины: {{ car.number }}</h5>
             </div>
             <div class="card-body">
-                <form method="post" novalidate>
+                <form method="post" id="editCarForm" novalidate>
+                    <input type="hidden" id="car_id" value="{{ car.id }}">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Номер машины <span class="text-danger">*</span></label>
                             <input type="text" class="form-control {% if errors.number %}is-invalid{% endif %}"
-                                   name="number" value="{{ form.number }}">
+                                   name="number" id="car_number" value="{{ form.number }}">
                             {% if errors.number %}<div class="invalid-feedback">{{ errors.number }}</div>{% endif %}
+                            <div class="realtime-feedback" id="carNumberFeedback"></div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Марка <span class="text-danger">*</span></label>
@@ -47,4 +49,72 @@
         </div>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('editCarForm');
+    var carNumberInput = document.getElementById('car_number');
+    var carId = document.getElementById('car_id').value;
+    var feedback = document.getElementById('carNumberFeedback');
+    var hasCarNumberError = false;
+    var requestId = 0;
+
+    var setFeedback = function (isError, message) {
+        feedback.textContent = message || '';
+        feedback.classList.remove('text-danger', 'text-success');
+        if (!message) {
+            carNumberInput.classList.remove('is-invalid', 'is-valid');
+            return;
+        }
+        if (isError) {
+            hasCarNumberError = true;
+            feedback.classList.add('text-danger');
+            carNumberInput.classList.add('is-invalid');
+            carNumberInput.classList.remove('is-valid');
+        } else {
+            hasCarNumberError = false;
+            feedback.classList.add('text-success');
+            carNumberInput.classList.remove('is-invalid');
+            carNumberInput.classList.add('is-valid');
+        }
+    };
+
+    var validateCarNumber = async function () {
+        var number = carNumberInput.value.trim();
+        if (!number) {
+            hasCarNumberError = false;
+            setFeedback(false, '');
+            return;
+        }
+
+        var currentRequest = ++requestId;
+        try {
+            var response = await fetch('/api/check-car-number', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ car_number: number, car_id: carId })
+            });
+            if (!response.ok || currentRequest !== requestId) return;
+            var data = await response.json();
+            if (currentRequest !== requestId) return;
+
+            if (data.exists) {
+                setFeedback(true, 'Машина с таким номером уже существует.');
+            } else {
+                setFeedback(false, '✅ Номер машины свободен');
+            }
+        } catch (e) {
+            if (currentRequest !== requestId) return;
+            hasCarNumberError = false;
+            setFeedback(false, '');
+        }
+    };
+
+    carNumberInput.addEventListener('input', validateCarNumber);
+    form.addEventListener('submit', function (e) {
+        if (hasCarNumberError) {
+            e.preventDefault();
+        }
+    });
+});
+</script>
 {% endblock %}

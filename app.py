@@ -184,10 +184,14 @@ def add_client():
         phone_digits = validate_phone(form["phone"])
         if phone_digits is None:
             errors["phone"] = "Телефон должен содержать ровно 10 цифр."
+        elif Client.query.filter_by(phone=phone_digits).first():
+            errors["phone"] = "Телефон уже используется."
 
         inn_digits = validate_inn(form["inn"])
         if inn_digits is None:
             errors["inn"] = "ИНН должен содержать ровно 14 цифр."
+        elif Client.query.filter_by(inn=inn_digits).first():
+            errors["inn"] = "ИНН уже используется."
 
         if not form["car_number"]:
             errors["car_number"] = "Номер машины обязателен."
@@ -249,10 +253,18 @@ def edit_client(id):
         phone_digits = validate_phone(form["phone"])
         if phone_digits is None:
             errors["phone"] = "Телефон должен содержать ровно 10 цифр."
+        else:
+            existing_phone = Client.query.filter_by(phone=phone_digits).first()
+            if existing_phone and existing_phone.id != id:
+                errors["phone"] = "Телефон уже используется."
 
         inn_digits = validate_inn(form["inn"])
         if inn_digits is None:
             errors["inn"] = "ИНН должен содержать ровно 14 цифр."
+        else:
+            existing_inn = Client.query.filter_by(inn=inn_digits).first()
+            if existing_inn and existing_inn.id != id:
+                errors["inn"] = "ИНН уже используется."
 
         if not errors:
             client.fio = form["fio"]
@@ -373,6 +385,83 @@ def delete_car(id):
     if next_page == "cars":
         return redirect(url_for("cars"))
     return redirect(url_for("client_detail", id=client_id))
+
+
+# ── Validation API ─────────────────────────────────────────────────────────────
+
+@app.route("/api/check-fio", methods=["POST"])
+def check_fio():
+    payload = request.get_json(silent=True) or {}
+    fio = payload.get("fio", "").strip()
+    if not fio:
+        return jsonify({"exists": False})
+
+    existing = Client.query.filter_by(fio=fio).first()
+    return jsonify({"exists": bool(existing)})
+
+
+@app.route("/api/check-phone", methods=["POST"])
+def check_phone():
+    payload = request.get_json(silent=True) or {}
+    phone = payload.get("phone", "").strip()
+    client_id = payload.get("client_id")
+    digits = re.sub(r"\D", "", phone)
+    is_valid = len(digits) == 10
+
+    exists = False
+    if is_valid:
+        query = Client.query.filter_by(phone=digits)
+        if client_id is not None and client_id != "":
+            try:
+                query = query.filter(Client.id != int(client_id))
+            except (TypeError, ValueError):
+                pass
+        exists = bool(query.first())
+
+    return jsonify({
+        "valid": is_valid,
+        "exists": exists,
+        "formatted": fmt_phone(digits) if is_valid else "",
+    })
+
+
+@app.route("/api/check-inn", methods=["POST"])
+def check_inn():
+    payload = request.get_json(silent=True) or {}
+    inn = payload.get("inn", "").strip()
+    client_id = payload.get("client_id")
+    digits = re.sub(r"\D", "", inn)
+    is_valid = len(digits) == 14
+
+    exists = False
+    if is_valid:
+        query = Client.query.filter_by(inn=digits)
+        if client_id is not None and client_id != "":
+            try:
+                query = query.filter(Client.id != int(client_id))
+            except (TypeError, ValueError):
+                pass
+        exists = bool(query.first())
+
+    return jsonify({"valid": is_valid, "exists": exists})
+
+
+@app.route("/api/check-car-number", methods=["POST"])
+def check_car_number():
+    payload = request.get_json(silent=True) or {}
+    car_number = payload.get("car_number", "").strip()
+    car_id = payload.get("car_id")
+    if not car_number:
+        return jsonify({"exists": False})
+
+    query = Car.query.filter_by(number=car_number)
+    if car_id is not None and car_id != "":
+        try:
+            query = query.filter(Car.id != int(car_id))
+        except (TypeError, ValueError):
+            pass
+    existing = query.first()
+    return jsonify({"exists": bool(existing)})
 
 
 # ── Sales ─────────────────────────────────────────────────────────────────────

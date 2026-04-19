@@ -44,6 +44,15 @@
             display: block;
         }
         .main-content { flex: 1; padding: 2rem; }
+        .form-control.is-invalid,
+        .form-select.is-invalid {
+            background-color: #fff5f5;
+        }
+        .realtime-feedback {
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+            min-height: 1.2em;
+        }
         @media (max-width: 768px) {
             .app-layout { flex-direction: column; }
             .sidebar { width: 100%; padding: 1rem; }

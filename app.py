@@ -56,6 +56,7 @@ class Car(db.Model):
     brand = db.Column(db.String(100), nullable=False)
     color = db.Column(db.String(50), nullable=False)
     note = db.Column(db.Text, nullable=True)
+    stock = db.Column(db.Float, default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sales = db.relationship("Sale", backref="car", lazy=True, cascade="all, delete-orphan")
     receipts = db.relationship("Receipt", backref="car", lazy=True, cascade="all, delete-orphan")
@@ -207,6 +208,24 @@ def _remaining_goods_by_day(days):
         {"min_day": min_day, "max_day": max_day},
     ).all()
     return {datetime.strptime(row.d, "%Y-%m-%d").date(): float(row.rem or 0) for row in rows if row.d}
+
+
+def _ensure_car_stock_column():
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    table_name = "car" if "car" in table_names else "cars" if "cars" in table_names else None
+    if not table_name:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns(table_name)}
+    if "stock" in columns:
+        return
+
+    if table_name == "car":
+        db.session.execute(text("ALTER TABLE car ADD COLUMN stock FLOAT DEFAULT 0"))
+    else:
+        db.session.execute(text("ALTER TABLE cars ADD COLUMN stock FLOAT DEFAULT 0"))
+    db.session.commit()
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -653,6 +672,44 @@ def check_car_number():
     return jsonify({"exists": bool(existing)})
 
 
+@app.route("/api/increase-stock", methods=["POST"])
+@admin_required
+def increase_stock():
+    _ensure_car_stock_column()
+
+    payload = request.get_json(silent=True) or {}
+    car_id_raw = payload.get("car_id")
+    liters_raw = payload.get("liters")
+
+    try:
+        car_id = int(car_id_raw)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Выберите корректную машину."}), 400
+
+    try:
+        liters = float(liters_raw)
+        if liters <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Количество литров должно быть больше 0."}), 400
+
+    car = Car.query.get(car_id)
+    if not car:
+        return jsonify({"ok": False, "error": "Машина не найдена."}), 404
+
+    car.stock = round(float(car.stock or 0) + liters, 2)
+    db.session.commit()
+
+    app.logger.info(
+        "Stock increased: car_id=%s, liters=%s, user_id=%s",
+        car_id,
+        liters,
+        session.get("user_id"),
+    )
+
+    return jsonify({"ok": True, "car_id": car.id, "stock": car.stock})
+
+
 # ── Sales ─────────────────────────────────────────────────────────────────────
 
 @app.route("/api/car-search")
@@ -1033,11 +1090,11 @@ def cash():
 @app.route("/turnover")
 @admin_required
 def turnover():
+    _ensure_car_stock_column()
     start_date = _parse_iso_date(request.args.get("start_date"))
     end_date = _parse_iso_date(request.args.get("end_date"))
 
     sale_day = func.date(Sale.created_at)
-    receipt_day = func.date(Receipt.created_at)
     payment_method = func.lower(func.coalesce(Sale.payment_method, ""))
 
     sales_query = db.session.query(
@@ -1047,24 +1104,17 @@ def turnover():
         func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, 0), else_=func.coalesce(Sale.payment_amount, 0))), 0).label("payments"),
         func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, Sale.total), else_=Sale.total - func.coalesce(Sale.payment_amount, 0))), 0).label("debts"),
     )
-    receipts_query = db.session.query(
-        receipt_day.label("receipt_date"),
-        func.coalesce(func.sum(Receipt.liters), 0).label("receipt_liters"),
-    )
 
     if start_date:
         min_dt = datetime.combine(start_date, time.min)
         sales_query = sales_query.filter(Sale.created_at >= min_dt)
-        receipts_query = receipts_query.filter(Receipt.created_at >= min_dt)
     if end_date:
         max_dt = datetime.combine(end_date + timedelta(days=1), time.min)
         sales_query = sales_query.filter(Sale.created_at < max_dt)
-        receipts_query = receipts_query.filter(Receipt.created_at < max_dt)
 
     rows_data = []
     totals = {
         "liters": 0.0,
-        "receipts_liters": 0.0,
         "amount": 0.0,
         "payments": 0.0,
         "debts": 0.0,
@@ -1074,7 +1124,7 @@ def turnover():
 
     try:
         grouped_sales = sales_query.group_by(sale_day).all()
-        grouped_receipts = receipts_query.group_by(receipt_day).all()
+        total_stock = float(db.session.query(func.coalesce(func.sum(Car.stock), 0)).scalar() or 0)
 
         sales_map = {}
         for row in grouped_sales:
@@ -1088,14 +1138,7 @@ def turnover():
                 "debts": float(row.debts or 0),
             }
 
-        receipts_map = {}
-        for row in grouped_receipts:
-            row_date = _coerce_day(row.receipt_date)
-            if not row_date:
-                continue
-            receipts_map[row_date] = float(row.receipt_liters or 0)
-
-        all_days = sorted(set(sales_map.keys()) | set(receipts_map.keys()), reverse=True)
+        all_days = sorted(set(sales_map.keys()), reverse=True)
 
         for row_date in all_days:
             sales_row = sales_map.get(row_date, {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0})
@@ -1103,12 +1146,10 @@ def turnover():
             amount = sales_row["amount"]
             payments = sales_row["payments"]
             debts = sales_row["debts"]
-            receipts_liters = receipts_map.get(row_date, 0.0)
             average_price = amount / liters if liters else 0.0
-            remaining_goods = receipts_liters - liters
+            remaining_goods = total_stock - liters
 
             totals["liters"] += liters
-            totals["receipts_liters"] += receipts_liters
             totals["amount"] += amount
             totals["payments"] += payments
             totals["debts"] += debts
@@ -1118,7 +1159,6 @@ def turnover():
                     "date": row_date,
                     "date_label": row_date.strftime("%d.%m.%Y"),
                     "liters": liters,
-                    "receipts_liters": receipts_liters,
                     "amount": amount,
                     "payments": payments,
                     "debts": debts,
@@ -1144,12 +1184,14 @@ def turnover():
         error_message=error_message,
         start_date=start_date.isoformat() if start_date else "",
         end_date=end_date.isoformat() if end_date else "",
+        cars=Car.query.options(joinedload(Car.client)).order_by(Car.number.asc()).all(),
     )
 
 
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        _ensure_car_stock_column()
 
         legacy_users = User.query.all()
         for legacy_user in legacy_users:

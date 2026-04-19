@@ -113,6 +113,11 @@ showBtn.addEventListener("click", async () => {
         }
         if (data.error_message) {
             showError(data.error_message);
+            tableContainer.classList.add("d-none");
+            exportBtn.disabled = true;
+            currentReportType = null;
+            currentMonth = null;
+            return;
         }
         tableTitle.textContent = `${data.report_label} — ${data.month_label}`;
         displayTable(data);

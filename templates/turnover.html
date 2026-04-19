@@ -1,33 +1,76 @@
-<html>
-<head>
-    <title>Turnover Report</title>
-</head>
-<body>
-    <h1>Turnover Table</h1>
-    <table border="1">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Liters (daily sales volume)</th>
-                <th>Amount (total daily sales)</th>
-                <th>Payments (daily payments)</th>
-                <th>Debts (daily debts)</th>
-                <th>Average price</th>
-                <th>Remaining goods</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>2026-04-19</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-            </tr>
-            <!-- More rows can be added here -->
-        </tbody>
-    </table>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Оборот — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">📈 Оборот по дням</h2>
+</div>
+
+<form method="get" action="/turnover" class="card card-body shadow-sm mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+            <label for="start_date" class="form-label fw-semibold">Дата с</label>
+            <input type="date" id="start_date" name="start_date" class="form-control" value="{{ start_date }}">
+        </div>
+        <div class="col-md-4">
+            <label for="end_date" class="form-label fw-semibold">Дата по</label>
+            <input type="date" id="end_date" name="end_date" class="form-control" value="{{ end_date }}">
+        </div>
+        <div class="col-md-4 d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Показать</button>
+            <a href="/turnover" class="btn btn-outline-secondary">Сбросить</a>
+        </div>
+    </div>
+</form>
+
+{% if rows %}
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Дата</th>
+                    <th>Литр</th>
+                    <th>Сумма</th>
+                    <th>Оплаты</th>
+                    <th>Долги</th>
+                    <th>Средняя цена</th>
+                    <th>Остаток товара</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td><strong>{{ row.date.strftime('%d.%m.%Y') }}</strong></td>
+                    <td>{{ '%.2f'|format(row.liters) }}</td>
+                    <td>{{ '%.2f'|format(row.amount) }}</td>
+                    <td>{{ '%.2f'|format(row.payments) }}</td>
+                    <td class="text-danger">{{ '%.2f'|format(row.debts) }}</td>
+                    <td>{{ '%.2f'|format(row.average_price) }}</td>
+                    <td>
+                        {% if row.remaining_goods is not none %}
+                            {{ '%.2f'|format(row.remaining_goods) }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-secondary fw-bold">
+                <tr>
+                    <td>ИТОГО</td>
+                    <td>{{ '%.2f'|format(totals.liters) }}</td>
+                    <td>{{ '%.2f'|format(totals.amount) }}</td>
+                    <td>{{ '%.2f'|format(totals.payments) }}</td>
+                    <td class="text-danger">{{ '%.2f'|format(totals.debts) }}</td>
+                    <td>{{ '%.2f'|format(totals.average_price) }}</td>
+                    <td>—</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">Данные по обороту отсутствуют за выбранный период.</div>
+{% endif %}
+{% endblock %}

@@ -76,7 +76,13 @@
                     <td>{{ "%.2f"|format(payments) }}</td>
                     <td><span class="text-danger fw-semibold">{{ "%.2f"|format(debts) }}</span></td>
                     <td>{{ "%.2f"|format(avg_price) }}</td>
-                    <td>{{ stock }}</td>
+                    <td>
+                        {% if stock is number %}
+                            {{ "%.2f"|format(stock|float) }}
+                        {% else %}
+                            {{ stock }}
+                        {% endif %}
+                    </td>
                 </tr>
             {% endfor %}
             </tbody>

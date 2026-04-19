@@ -3,10 +3,8 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">📊 Оборот</h2>
-    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#increaseStockModal">
-        ➕ Увеличить остаток
-    </button>
 </div>
+<div id="increaseStockSuccess" class="alert alert-success d-none" role="alert"></div>
 
 <form method="get" action="/turnover" class="mb-4">
     <div class="card shadow-sm">
@@ -44,22 +42,13 @@
             <thead class="table-dark">
                 <tr>
                     <th>Дата</th>
+                    <th>Машина</th>
                     <th>Литр</th>
                     <th>Сумма</th>
                     <th>Оплаты</th>
                     <th>Долги</th>
                     <th>Средняя цена</th>
-                    <th>
-                        Остаток товара
-                        <button
-                            type="button"
-                            class="btn btn-sm btn-outline-light ms-2"
-                            data-bs-toggle="modal"
-                            data-bs-target="#increaseStockModal"
-                        >
-                            ➕ Увеличить
-                        </button>
-                    </th>
+                    <th>Остаток товара</th>
                 </tr>
             </thead>
             <tbody>
@@ -84,16 +73,33 @@
                             —
                         {% endif %}
                     </td>
+                    <td>{{ row.car_label if row.car_label is defined else "—" }}</td>
                     <td>{{ "%.2f"|format(liters) }}</td>
                     <td>{{ "%.2f"|format(amount) }}</td>
                     <td>{{ "%.2f"|format(payments) }}</td>
                     <td><span class="text-danger fw-semibold">{{ "%.2f"|format(debts) }}</span></td>
                     <td>{{ "%.2f"|format(avg_price) }}</td>
-                    <td>
+                    <td
+                        data-stock-cell
+                        data-car-id="{{ row.car_id if row.car_id is defined else '' }}"
+                        data-row-liters="{{ liters }}"
+                    >
                         {% if stock is number %}
-                            {{ "%.2f"|format(stock|float) }}
+                            <span data-stock-value>{{ "%.2f"|format(stock|float) }}</span>
                         {% else %}
-                            {{ stock }}
+                            <span data-stock-value>{{ stock }}</span>
+                        {% endif %}
+                        {% if session.get("role") == "admin" and row.car_id is defined %}
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-success ms-2 increase-stock-btn"
+                            data-bs-toggle="modal"
+                            data-bs-target="#increaseStockModal"
+                            data-car-id="{{ row.car_id }}"
+                            data-car-label="{{ row.car_label if row.car_label is defined else '' }}"
+                        >
+                            ➕ Увеличить
+                        </button>
                         {% endif %}
                     </td>
                 </tr>
@@ -102,6 +108,7 @@
             <tfoot>
                 <tr class="table-light fw-bold">
                     <td>ИТОГО</td>
+                    <td>—</td>
                     <td>{{ "%.2f"|format(ns.total_liters) }}</td>
                     <td>{{ "%.2f"|format(ns.total_amount) }}</td>
                     <td>{{ "%.2f"|format(ns.total_payments) }}</td>
@@ -129,18 +136,10 @@
             </div>
             <div class="modal-body">
                 <div id="increaseStockError" class="alert alert-danger d-none" role="alert"></div>
-                <div class="mb-3">
-                    <label for="stockCarSelect" class="form-label">Машина</label>
-                    <select id="stockCarSelect" class="form-select">
-                        <option value="">Выберите машину</option>
-                        {% for car in cars %}
-                        <option value="{{ car.id }}">{{ car.number }} — {{ car.client.fio }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                <div id="increaseStockCarInfo" class="text-muted small mb-2"></div>
                 <div class="mb-1">
                     <label for="stockLitersInput" class="form-label">Литры</label>
-                    <input id="stockLitersInput" type="number" step="0.01" min="0.01" class="form-control" placeholder="Например, 100">
+                    <input id="stockLitersInput" type="number" step="0.01" min="0.01" class="form-control">
                 </div>
             </div>
             <div class="modal-footer">
@@ -155,12 +154,17 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    const DEFAULT_INCREASE_LITERS = 5000;
     const applyBtn = document.getElementById("applyIncreaseStockBtn");
-    const carSelect = document.getElementById("stockCarSelect");
+    const stockButtons = document.querySelectorAll(".increase-stock-btn");
     const litersInput = document.getElementById("stockLitersInput");
+    const carInfo = document.getElementById("increaseStockCarInfo");
     const errorBox = document.getElementById("increaseStockError");
+    const successBox = document.getElementById("increaseStockSuccess");
     const modalEl = document.getElementById("increaseStockModal");
     const modal = window.bootstrap ? window.bootstrap.Modal.getOrCreateInstance(modalEl) : null;
+    let selectedCarId = null;
+    let successTimer = null;
 
     function showError(message) {
         errorBox.textContent = message;
@@ -172,13 +176,45 @@ document.addEventListener("DOMContentLoaded", function () {
         errorBox.classList.add("d-none");
     }
 
+    function showSuccess(message) {
+        if (!successBox) return;
+        successBox.textContent = message;
+        successBox.classList.remove("d-none");
+        if (successTimer) {
+            clearTimeout(successTimer);
+        }
+        successTimer = setTimeout(() => {
+            successBox.classList.add("d-none");
+            successBox.textContent = "";
+        }, 3000);
+    }
+
+    stockButtons.forEach((button) => {
+        button.addEventListener("click", function () {
+            hideError();
+            const parsedCarId = Number(button.dataset.carId);
+            selectedCarId = Number.isFinite(parsedCarId) && parsedCarId > 0 ? parsedCarId : null;
+            if (carInfo) {
+                carInfo.textContent = button.dataset.carLabel ? `Машина: ${button.dataset.carLabel}` : "";
+            }
+            litersInput.value = String(DEFAULT_INCREASE_LITERS);
+            litersInput.focus();
+        });
+    });
+
+    if (modalEl) {
+        modalEl.addEventListener("hidden.bs.modal", function () {
+            selectedCarId = null;
+            hideError();
+        });
+    }
+
     applyBtn.addEventListener("click", async function () {
         hideError();
-        const carId = carSelect.value;
         const liters = parseFloat(litersInput.value);
 
-        if (!carId) {
-            showError("Выберите машину.");
+        if (!selectedCarId) {
+            showError("Не выбрана машина для увеличения остатка.");
             return;
         }
         if (!Number.isFinite(liters) || liters <= 0) {
@@ -191,17 +227,29 @@ document.addEventListener("DOMContentLoaded", function () {
             const response = await fetch("/api/increase-stock", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ car_id: Number(carId), liters: liters })
+                body: JSON.stringify({ car_id: selectedCarId, liters: liters })
             });
             const data = await response.json();
             if (!response.ok || !data.ok) {
                 showError(data.error || "Не удалось увеличить остаток.");
                 return;
             }
+
+            document.querySelectorAll("[data-stock-cell]").forEach((cell) => {
+                const cellCarId = Number(cell.dataset.carId);
+                if (!Number.isFinite(cellCarId) || cellCarId !== selectedCarId) return;
+                const valueEl = cell.querySelector("[data-stock-value]");
+                if (!valueEl) return;
+                const rowLiters = parseFloat(cell.dataset.rowLiters || "");
+                const currentStock = parseFloat(data.stock);
+                if (!Number.isFinite(rowLiters) || !Number.isFinite(currentStock)) return;
+                valueEl.textContent = (currentStock - rowLiters).toFixed(2);
+            });
+
+            showSuccess("Остаток успешно увеличен.");
             if (modal) {
                 modal.hide();
             }
-            window.location.reload();
         } catch (e) {
             showError("Ошибка сети. Попробуйте снова.");
         } finally {

@@ -16,6 +16,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 _SAFE_SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+DEBT_PAYMENT_TYPE = "долг"
 
 
 class Sale(db.Model):
@@ -108,8 +109,8 @@ def turnover():
         sale_day.label("sale_date"),
         func.coalesce(func.sum(Sale.liters), 0).label("liters"),
         func.coalesce(func.sum(Sale.amount), 0).label("amount"),
-        func.coalesce(func.sum(case((payment_type == "долг", 0), else_=Sale.amount)), 0).label("payments"),
-        func.coalesce(func.sum(case((payment_type == "долг", Sale.amount), else_=0)), 0).label("debts"),
+        func.coalesce(func.sum(case((payment_type == DEBT_PAYMENT_TYPE, 0), else_=Sale.amount)), 0).label("payments"),
+        func.coalesce(func.sum(case((payment_type == DEBT_PAYMENT_TYPE, Sale.amount), else_=0)), 0).label("debts"),
     )
 
     if start_date:

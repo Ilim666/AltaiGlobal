@@ -1183,7 +1183,7 @@ def turnover():
         func.coalesce(func.sum(Sale.liters), 0).label("liters"),
         func.coalesce(func.sum(Sale.total), 0).label("amount"),
         func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, 0), else_=func.coalesce(Sale.payment_amount, 0))), 0).label("payments"),
-        func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, Sale.total), else_=Sale.total - func.coalesce(Sale.payment_amount, 0))), 0).label("debts"),
+        func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, Sale.total - func.coalesce(Sale.payment_amount, 0)), else_=0)), 0).label("debts"),
     )
 
     if start_date:

@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from functools import wraps
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy import case, func, inspect, text
@@ -235,6 +235,86 @@ def index():
 def clients():
     all_clients = Client.query.order_by(Client.id.desc()).all()
     return render_template("clients.html", clients=all_clients)
+
+
+@app.route("/admin/users")
+@admin_required
+def admin_users():
+    users = User.query.order_by(User.id.asc()).all()
+    return render_template("admin/users.html", users=users)
+
+
+@app.route("/admin/users/add", methods=["GET", "POST"])
+@admin_required
+def admin_add_user():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+        role = request.form.get("role", "operator")
+        if role not in {"operator", "admin"}:
+            role = "operator"
+
+        if not username or not password:
+            flash("Заполните все поля!", "danger")
+            return redirect(url_for("admin_add_user"))
+
+        if User.query.filter_by(username=username).first():
+            flash("Пользователь уже существует!", "danger")
+            return redirect(url_for("admin_add_user"))
+
+        user = User(username=username, password=generate_password_hash(password), role=role)
+        db.session.add(user)
+        db.session.commit()
+        flash(f"Пользователь {username} создан!", "success")
+        return redirect(url_for("admin_users"))
+
+    return render_template("admin/add_user.html")
+
+
+@app.route("/admin/users/<int:user_id>/edit", methods=["GET", "POST"])
+@admin_required
+def admin_edit_user(user_id):
+    user = User.query.get_or_404(user_id)
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+        role = request.form.get("role", "operator")
+        if role not in {"operator", "admin"}:
+            role = "operator"
+
+        if not username:
+            flash("Заполните имя пользователя!", "danger")
+            return redirect(url_for("admin_edit_user", user_id=user_id))
+
+        if username != user.username and User.query.filter_by(username=username).first():
+            flash("Имя пользователя уже используется!", "danger")
+            return redirect(url_for("admin_edit_user", user_id=user_id))
+
+        user.username = username
+        if password:
+            user.password = generate_password_hash(password)
+        user.role = role
+        db.session.commit()
+        flash("Пользователь обновлен!", "success")
+        return redirect(url_for("admin_users"))
+
+    return render_template("admin/edit_user.html", user=user)
+
+
+@app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.id == session.get("user_id"):
+        flash("Нельзя удалить свой аккаунт!", "danger")
+        return redirect(url_for("admin_users"))
+
+    username = user.username
+    db.session.delete(user)
+    db.session.commit()
+    flash(f"Пользователь {username} удален!", "success")
+    return redirect(url_for("admin_users"))
 
 
 @app.route("/add-client", methods=["GET", "POST"])

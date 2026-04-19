@@ -77,6 +77,9 @@
                 <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">👥 Список клиентов</a>
                 <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">➕ Добавить клиента</a>
 
+                <span class="nav-section-label">Пользователи</span>
+                <a class="nav-link {% if request.path.startswith('/admin/users') %}active{% endif %}" href="{{ url_for('admin_users') }}">👥 Управление пользователями</a>
+
                 <span class="nav-section-label">Машины</span>
                 <a class="nav-link {% if request.path == '/cars' %}active{% endif %}" href="/cars">🚗 Список машин</a>
                 <a class="nav-link {% if request.path == '/add-car' %}active{% endif %}" href="/add-car">🚙 Добавить машину</a>

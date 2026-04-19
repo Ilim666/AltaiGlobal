@@ -367,9 +367,12 @@ def _ensure_liters_numeric_columns():
 
     def _sqlite_copy_sale_to_numeric():
         sale_columns = {column["name"] for column in inspector.get_columns("sale")}
-        created_by_expr = "created_by" if "created_by" in sale_columns else "NULL"
-        note_expr = "note" if "note" in sale_columns else "NULL"
-        created_at_expr = "created_at" if "created_at" in sale_columns else "CURRENT_TIMESTAMP"
+        if "created_by" not in sale_columns:
+            db.session.execute(text("ALTER TABLE sale ADD COLUMN created_by INTEGER"))
+        if "note" not in sale_columns:
+            db.session.execute(text("ALTER TABLE sale ADD COLUMN note TEXT"))
+        if "created_at" not in sale_columns:
+            db.session.execute(text("ALTER TABLE sale ADD COLUMN created_at DATETIME"))
 
         db.session.execute(text("DROP TABLE IF EXISTS sale__tmp"))
         db.session.execute(
@@ -394,20 +397,20 @@ def _ensure_liters_numeric_columns():
         )
         db.session.execute(
             text(
-                f"""
+                """
                 INSERT INTO sale__tmp
                     (id, car_id, liters, price_per_liter, total, payment_method, payment_amount, created_by, note, created_at)
                 SELECT
                     id,
                     car_id,
-                    ROUND(CAST(liters AS NUMERIC), 2),
+                    CAST(liters AS NUMERIC),
                     price_per_liter,
                     total,
                     payment_method,
                     payment_amount,
-                    {created_by_expr},
-                    {note_expr},
-                    {created_at_expr}
+                    created_by,
+                    note,
+                    created_at
                 FROM sale
                 """
             )
@@ -417,8 +420,10 @@ def _ensure_liters_numeric_columns():
 
     def _sqlite_copy_receipt_to_numeric():
         receipt_columns = {column["name"] for column in inspector.get_columns("receipt")}
-        created_at_expr = "created_at" if "created_at" in receipt_columns else "CURRENT_TIMESTAMP"
-        notes_expr = "notes" if "notes" in receipt_columns else "NULL"
+        if "created_at" not in receipt_columns:
+            db.session.execute(text("ALTER TABLE receipt ADD COLUMN created_at DATETIME"))
+        if "notes" not in receipt_columns:
+            db.session.execute(text("ALTER TABLE receipt ADD COLUMN notes TEXT"))
 
         db.session.execute(text("DROP TABLE IF EXISTS receipt__tmp"))
         db.session.execute(
@@ -438,15 +443,15 @@ def _ensure_liters_numeric_columns():
         )
         db.session.execute(
             text(
-                f"""
+                """
                 INSERT INTO receipt__tmp (id, car_id, liters, amount, created_at, notes)
                 SELECT
                     id,
                     car_id,
-                    ROUND(CAST(liters AS NUMERIC), 2),
+                    CAST(liters AS NUMERIC),
                     amount,
-                    {created_at_expr},
-                    {notes_expr}
+                    created_at,
+                    notes
                 FROM receipt
                 """
             )
@@ -461,15 +466,19 @@ def _ensure_liters_numeric_columns():
 
     if db.engine.dialect.name == "sqlite":
         db.session.execute(text("PRAGMA foreign_keys=OFF"))
+        migration_step = "initialization"
         try:
             if sale_needs_migration:
+                migration_step = "sale.liters"
                 _sqlite_copy_sale_to_numeric()
+                db.session.commit()
             if receipt_needs_migration:
+                migration_step = "receipt.liters"
                 _sqlite_copy_receipt_to_numeric()
-            db.session.commit()
-        except SQLAlchemyError:
+                db.session.commit()
+        except SQLAlchemyError as exc:
             db.session.rollback()
-            raise
+            raise RuntimeError(f"Failed to migrate {migration_step} column to NUMERIC(10, 2).") from exc
         finally:
             db.session.execute(text("PRAGMA foreign_keys=ON"))
             db.session.commit()

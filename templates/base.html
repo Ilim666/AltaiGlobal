@@ -16,10 +16,25 @@
             padding: 1.5rem 1rem;
             flex-shrink: 0;
         }
+        .sidebar-brand {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.08);
+            margin-bottom: 0.8rem;
+        }
+        .sidebar-brand img {
+            width: 32px;
+            height: 32px;
+            display: block;
+        }
         .sidebar-title {
             font-size: 1.3rem;
             font-weight: 700;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
             color: #fff;
             text-decoration: none;
             display: block;
@@ -64,6 +79,9 @@
 {% if session.get("user_id") %}
 <div class="app-layout">
     <aside class="sidebar">
+        <a class="sidebar-brand" href="/" aria-label="AltaiGlobal">
+            <img src="{{ url_for('static', filename='img/logo-ag.svg') }}" alt="AG">
+        </a>
         <a class="sidebar-title" href="/">🚗 AltaiGlobal</a>
         <div class="small text-light mb-3">
             {{ session.get("username") }} ({{ session.get("role") }})

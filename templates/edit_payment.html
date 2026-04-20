@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Редактировать платеж — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">✏️ Редактировать платеж</h2>
+    <a href="{{ url_for('payments') }}" class="btn btn-outline-secondary">← Назад</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Платеж #{{ payment.id }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Сумма <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" min="0.01" class="form-control {% if errors.amount %}is-invalid{% endif %}" name="amount" value="{{ form.amount }}">
+                            {% if errors.amount %}<div class="invalid-feedback">{{ errors.amount }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Способ оплаты</label>
+                            <select class="form-select {% if errors.payment_method %}is-invalid{% endif %}" name="payment_method">
+                                <option value="">Не выбран</option>
+                                {% for method in payment_methods %}
+                                <option value="{{ method }}" {% if form.payment_method == method %}selected{% endif %}>{{ method|capitalize }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.payment_method %}<div class="invalid-feedback">{{ errors.payment_method }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Тип оплаты <span class="text-danger">*</span></label>
+                            <select class="form-select {% if errors.payment_type %}is-invalid{% endif %}" name="payment_type">
+                                <option value="">Выберите тип...</option>
+                                {% for payment_type in payment_types %}
+                                <option value="{{ payment_type }}" {% if form.payment_type == payment_type %}selected{% endif %}>{{ payment_type|capitalize }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.payment_type %}<div class="invalid-feedback">{{ errors.payment_type }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Продажа</label>
+                            <select class="form-select {% if errors.sale_id %}is-invalid{% endif %}" name="sale_id">
+                                <option value="">Без привязки</option>
+                                {% for s in sales_rows %}
+                                {% set label = '#' ~ s.id %}
+                                {% if s.car and s.car.client %}
+                                {% set label = label ~ ' — ' ~ s.car.client.fio ~ ' (' ~ s.car.number ~ ')' %}
+                                {% endif %}
+                                <option value="{{ s.id }}" {% if form.sale_id == (s.id|string) %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.sale_id %}<div class="invalid-feedback">{{ errors.sale_id }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Клиент <span class="text-danger">*</span></label>
+                            <select class="form-select {% if errors.client_id %}is-invalid{% endif %}" name="client_id">
+                                <option value="">Выберите клиента...</option>
+                                {% for c in clients %}
+                                <option value="{{ c.id }}" {% if form.client_id == (c.id|string) %}selected{% endif %}>{{ c.fio }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.client_id %}<div class="invalid-feedback">{{ errors.client_id }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Кто принял оплату</label>
+                            <select class="form-select {% if errors.paid_by %}is-invalid{% endif %}" name="paid_by">
+                                <option value="">Не указан</option>
+                                {% for u in users %}
+                                <option value="{{ u.id }}" {% if form.paid_by == (u.id|string) %}selected{% endif %}>{{ u.username }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.paid_by %}<div class="invalid-feedback">{{ errors.paid_by }}</div>{% endif %}
+                        </div>
+                    </div>
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-warning">💾 Сохранить</button>
+                        <a href="{{ url_for('payments') }}" class="btn btn-outline-secondary">Отмена</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

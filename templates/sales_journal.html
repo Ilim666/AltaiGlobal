@@ -35,6 +35,9 @@
                     <th>Оператор</th>
                     <th>Остаток суммы</th>
                     <th>Примечание</th>
+                    {% if session.get("role") == "admin" %}
+                    <th>Действия</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -69,6 +72,11 @@
                     {{ "%.2f"|format((s.total - (s.payment_amount or 0))|round(2)|float) }}
                 </td>
                 <td>{{ s.note or '—' }}</td>
+                {% if session.get("role") == "admin" %}
+                <td>
+                    <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-sm btn-outline-warning">✏️ Редактировать</a>
+                </td>
+                {% endif %}
             </tr>
             {% endfor %}
             </tbody>

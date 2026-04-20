@@ -30,6 +30,26 @@
             </div>
         </div>
         {% if session.get('role') == 'admin' %}
+        <hr>
+        <p class="mb-1 text-muted small">Ссылка клиента</p>
+        <div class="input-group mb-2">
+            <input id="portalUrlInput" type="text" class="form-control" value="{{ portal_url }}" readonly>
+            <button class="btn btn-outline-secondary" type="button" id="copyPortalUrlBtn">Копировать</button>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <form method="post" action="/client/{{ client.id }}/portal/reset" class="d-inline">
+                <button class="btn btn-sm btn-outline-warning">🔄 Сбросить токен</button>
+            </form>
+            <form method="post" action="/client/{{ client.id }}/portal/access" class="d-inline">
+                {% if client.portal_enabled %}
+                <input type="hidden" name="portal_enabled" value="0">
+                <button class="btn btn-sm btn-outline-danger">🚫 Отключить доступ</button>
+                {% else %}
+                <input type="hidden" name="portal_enabled" value="1">
+                <button class="btn btn-sm btn-outline-success">✅ Включить доступ</button>
+                {% endif %}
+            </form>
+        </div>
         <div class="text-end mt-2">
             <form method="post" action="/delete-client/{{ client.id }}" class="d-inline"
                   onsubmit="return confirm('Удалить клиента и все его машины?')">
@@ -93,4 +113,21 @@
     {% endif %}
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+{{ super() }}
+<script>
+document.getElementById('copyPortalUrlBtn')?.addEventListener('click', async function () {
+    var input = document.getElementById('portalUrlInput');
+    if (!input) return;
+    try {
+        await navigator.clipboard.writeText(input.value);
+    } catch (e) {
+        input.select();
+        document.execCommand('copy');
+        input.setSelectionRange(0, 0);
+    }
+});
+</script>
 {% endblock %}

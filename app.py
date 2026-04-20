@@ -8,7 +8,7 @@ from datetime import date, datetime, time, timedelta
 from functools import wraps
 
 import pytz
-from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -52,6 +52,8 @@ class Client(db.Model):
     fio = db.Column(db.String(100), unique=True, nullable=False)
     phone = db.Column(db.String(10), nullable=False)
     inn = db.Column(db.String(14), nullable=False)
+    portal_token = db.Column(db.String(128), unique=True, nullable=True)
+    portal_enabled = db.Column(db.Boolean, default=True, server_default=text("1"), nullable=False)
     is_deleted = db.Column(db.Boolean, default=False, server_default=text("0"), nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
@@ -351,6 +353,65 @@ def _ensure_sale_payment_user_columns():
         if "paid_by" not in payment_columns:
             db.session.execute(text("ALTER TABLE payment ADD COLUMN paid_by INTEGER"))
             db.session.commit()
+
+
+def _generate_client_portal_token(ignore_client_id=None):
+    while True:
+        token = secrets.token_urlsafe(32)
+        query = Client.query.filter_by(portal_token=token)
+        if ignore_client_id is not None:
+            query = query.filter(Client.id != ignore_client_id)
+        if not query.first():
+            return token
+
+
+def _ensure_client_portal_fields():
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    if "client" not in table_names:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("client")}
+    schema_changed = False
+
+    if "portal_token" not in columns:
+        db.session.execute(text("ALTER TABLE client ADD COLUMN portal_token VARCHAR(128)"))
+        schema_changed = True
+    if "portal_enabled" not in columns:
+        db.session.execute(text("ALTER TABLE client ADD COLUMN portal_enabled BOOLEAN DEFAULT 1"))
+        schema_changed = True
+
+    if schema_changed:
+        db.session.commit()
+
+    db.session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_client_portal_token ON client (portal_token)"))
+    db.session.execute(text("UPDATE client SET portal_enabled = 1 WHERE portal_enabled IS NULL"))
+    db.session.commit()
+
+    clients_without_token = Client.query.filter(
+        db.or_(Client.portal_token.is_(None), Client.portal_token == "")
+    ).all()
+    for client in clients_without_token:
+        client.portal_token = _generate_client_portal_token(ignore_client_id=client.id)
+
+    duplicate_tokens = db.session.execute(
+        text(
+            """
+            SELECT portal_token
+            FROM client
+            WHERE portal_token IS NOT NULL AND portal_token != ''
+            GROUP BY portal_token
+            HAVING COUNT(*) > 1
+            """
+        )
+    ).scalars().all()
+    for token in duplicate_tokens:
+        clients_with_same_token = Client.query.filter_by(portal_token=token).order_by(Client.id.asc()).all()
+        for duplicate_client in clients_with_same_token[1:]:
+            duplicate_client.portal_token = _generate_client_portal_token(ignore_client_id=duplicate_client.id)
+
+    if clients_without_token or duplicate_tokens:
+        db.session.commit()
 
 
 def _ensure_liters_numeric_columns():
@@ -688,7 +749,13 @@ def add_client():
             errors["car_color"] = "Цвет машины обязателен."
 
         if not errors:
-            client = Client(fio=form["fio"], phone=phone_digits, inn=inn_digits)
+            client = Client(
+                fio=form["fio"],
+                phone=phone_digits,
+                inn=inn_digits,
+                portal_token=_generate_client_portal_token(),
+                portal_enabled=True,
+            )
             db.session.add(client)
             db.session.flush()
             car = Car(
@@ -709,8 +776,32 @@ def add_client():
 @login_required
 def client_detail(id):
     client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
+    if not client.portal_token:
+        client.portal_token = _generate_client_portal_token(ignore_client_id=client.id)
+        db.session.commit()
     cars = Car.query.filter_by(client_id=id, is_deleted=False).order_by(Car.id.desc()).all()
-    return render_template("client_detail.html", client=client, cars=cars)
+    portal_url = url_for("client_portal", portal_token=client.portal_token, _external=True)
+    return render_template("client_detail.html", client=client, cars=cars, portal_url=portal_url)
+
+
+@app.route("/client/<int:id>/portal/reset", methods=["POST"])
+@admin_required
+def reset_client_portal_token(id):
+    client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
+    client.portal_token = _generate_client_portal_token(ignore_client_id=client.id)
+    db.session.commit()
+    return redirect(url_for("client_detail", id=id))
+
+
+@app.route("/client/<int:id>/portal/access", methods=["POST"])
+@admin_required
+def set_client_portal_access(id):
+    client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
+    client.portal_enabled = request.form.get("portal_enabled") == "1"
+    if client.portal_enabled and not client.portal_token:
+        client.portal_token = _generate_client_portal_token(ignore_client_id=client.id)
+    db.session.commit()
+    return redirect(url_for("client_detail", id=id))
 
 
 @app.route("/edit-client/<int:id>", methods=["GET", "POST"])
@@ -1758,6 +1849,70 @@ def payments():
     return render_template("payments.html", payments=all_payments, q=q)
 
 
+@app.route("/c/<portal_token>")
+def client_portal(portal_token):
+    client = Client.query.filter_by(
+        portal_token=portal_token,
+        portal_enabled=True,
+        is_deleted=False,
+    ).first()
+    if not client:
+        abort(404)
+
+    sales = (
+        Sale.query
+        .options(joinedload(Sale.car))
+        .join(Sale.car)
+        .filter(Car.client_id == client.id)
+        .order_by(Sale.created_at.desc())
+        .all()
+    )
+    payments = (
+        Payment.query
+        .filter_by(client_id=client.id)
+        .order_by(Payment.created_at.desc())
+        .all()
+    )
+
+    sale_payments = defaultdict(lambda: Decimal("0.00"))
+    for payment in payments:
+        if payment.sale_id:
+            sale_payments[payment.sale_id] += _to_decimal_2(payment.amount)
+
+    sales_rows = []
+    total_sales_amount = Decimal("0.00")
+    current_debt = Decimal("0.00")
+    for sale in sales:
+        total = _to_decimal_2(sale.total)
+        paid = sale_payments[sale.id]
+        remaining = total - paid
+        if remaining < Decimal("0.00"):
+            remaining = Decimal("0.00")
+
+        total_sales_amount += total
+        current_debt += remaining
+        sales_rows.append(
+            {
+                "sale": sale,
+                "paid": paid,
+                "remaining": remaining,
+                "status": "Оплачено" if remaining <= Decimal("0.00") else ("Частично" if paid > Decimal("0.00") else "Долг"),
+            }
+        )
+
+    total_payments_amount = sum((_to_decimal_2(payment.amount) for payment in payments), Decimal("0.00"))
+
+    return render_template(
+        "client_portal.html",
+        client=client,
+        sales_rows=sales_rows,
+        payments=payments,
+        total_sales_amount=total_sales_amount,
+        total_payments_amount=total_payments_amount,
+        current_debt=current_debt,
+    )
+
+
 @app.route("/cash")
 @login_required
 def cash():
@@ -1841,6 +1996,7 @@ if __name__ == "__main__":
         _ensure_daily_stock_tables()
         _ensure_client_car_soft_delete()
         _ensure_sale_payment_user_columns()
+        _ensure_client_portal_fields()
         _ensure_liters_numeric_columns()
 
         legacy_users = User.query.all()

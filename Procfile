@@ -1,1 +1,1 @@
-web: python -c "import sqlalchemy; print('SQLA', sqlalchemy.__file__); print('VER', getattr(sqlalchemy,'__version__','?')); print('HAS__ALL__', hasattr(sqlalchemy,'__all__'))" ; gunicorn app:app --bind 0.0.0.0:$PORT
+web: gunicorn app:app

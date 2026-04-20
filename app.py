@@ -25,34 +25,6 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 db = SQLAlchemy(app)
 TZ = pytz.timezone(os.getenv("TZ", "Asia/Almaty"))
 
-with app.app_context():
-    db.create_all()
-    # Миграция и обеспечение таблиц/колонок — добавляй свои утилиты если были нужны
-    _ensure_daily_stock_tables()
-    _ensure_client_car_soft_delete()
-    _ensure_sale_payment_user_columns()
-    _ensure_liters_numeric_columns()
-
-    legacy_users = User.query.all()
-    for legacy_user in legacy_users:
-        if not (legacy_user.password or "").startswith(("pbkdf2:", "scrypt:")):
-            legacy_user.password = generate_password_hash(legacy_user.password or "")
-
-    admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD") or "admin123"
-    operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD") or "operator123"
-
-    if not User.query.filter_by(username="admin").first():
-        admin = User(username="admin", password=generate_password_hash(admin_password), role="admin")
-        db.session.add(admin)
-        print("✅ Создан пользователь: admin")
-
-    if not User.query.filter_by(username="operator").first():
-        operator = User(username="operator", password=generate_password_hash(operator_password), role="operator")
-        db.session.add(operator)
-        print("✅ Создан пользователь: operator")
-
-    db.session.commit()
-
 
 def fmt_phone(phone):
     """Format a 10-digit phone string as XXXX-XXX-XXX."""
@@ -540,6 +512,36 @@ def _get_or_create_daily_stock(stock_date):
     db.session.add(daily_stock)
     db.session.flush()
     return daily_stock
+
+
+with app.app_context():
+    db.create_all()
+    _ensure_daily_stock_tables()
+    _ensure_client_car_soft_delete()
+    _ensure_sale_payment_user_columns()
+    _ensure_liters_numeric_columns()
+
+    # Миграция старых пользователей
+    legacy_users = User.query.all()
+    for legacy_user in legacy_users:
+        if not (legacy_user.password or "").startswith(("pbkdf2:", "scrypt:")):
+            legacy_user.password = generate_password_hash(legacy_user.password or "")
+
+    admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD") or "admin123"
+    operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD") or "operator123"
+
+    # Добавление пользователей по умолчанию
+    if not User.query.filter_by(username="admin").first():
+        admin = User(username="admin", password=generate_password_hash(admin_password), role="admin")
+        db.session.add(admin)
+        print("✅ Создан пользователь: admin")
+
+    if not User.query.filter_by(username="operator").first():
+        operator = User(username="operator", password=generate_password_hash(operator_password), role="operator")
+        db.session.add(operator)
+        print("✅ Создан пользователь: operator")
+
+    db.session.commit()
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────

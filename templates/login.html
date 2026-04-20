@@ -1,5 +1,15 @@
 {% extends "base.html" %}
 
+{% block extra_head %}
+<style>
+    .login-wordmark {
+        max-width: 100%;
+        height: 44px;
+        object-fit: contain;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-5">
     <div class="row justify-content-center">
@@ -10,7 +20,7 @@
                         <img
                             src="{{ url_for('static', filename='img/logo-altai-global.svg') }}"
                             alt="АЛТАЙGLOBAL"
-                            style="max-width: 100%; height: 44px; object-fit: contain;"
+                            class="login-wordmark"
                         >
                     </div>
                     <h3 class="card-title text-center">Вход в систему</h3>

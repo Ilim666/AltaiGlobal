@@ -1842,7 +1842,7 @@ def edit_payment(payment_id):
         joinedload(Payment.client),
         joinedload(Payment.paid_by_user),
     ).get_or_404(payment_id)
-    allowed_payment_methods = ["наличка", "безнал", "доллар"]
+    allowed_payment_methods = [method for method in PAYMENT_METHODS if method != "долг"]
     users = User.query.order_by(User.username.asc()).all()
     clients = Client.query.filter_by(is_deleted=False).order_by(Client.fio.asc()).all()
     sales_rows = (

@@ -170,6 +170,19 @@ def verify_user_password(user, password):
     return check_password_hash(user.password, password)
 
 
+def _session_csrf_token():
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": _session_csrf_token() if "user_id" in session else ""}
+
+
 def validate_phone(phone):
     digits = re.sub(r"\D", "", phone)
     return digits if len(digits) == 10 else None
@@ -355,14 +368,18 @@ def _ensure_sale_payment_user_columns():
             db.session.commit()
 
 
-def _generate_client_portal_token(ignore_client_id=None):
-    while True:
+def _generate_client_portal_token(exclude_client_id=None, max_attempts=20):
+    for _ in range(max_attempts):
         token = secrets.token_urlsafe(32)
         query = Client.query.filter_by(portal_token=token)
-        if ignore_client_id is not None:
-            query = query.filter(Client.id != ignore_client_id)
+        if exclude_client_id is not None:
+            query = query.filter(Client.id != exclude_client_id)
         if not query.first():
             return token
+    raise RuntimeError(
+        f"Failed to generate a unique portal token after {max_attempts} attempts. "
+        "Check portal_token uniqueness/index integrity."
+    )
 
 
 def _ensure_client_portal_fields():
@@ -378,21 +395,35 @@ def _ensure_client_portal_fields():
         db.session.execute(text("ALTER TABLE client ADD COLUMN portal_token VARCHAR(128)"))
         schema_changed = True
     if "portal_enabled" not in columns:
-        db.session.execute(text("ALTER TABLE client ADD COLUMN portal_enabled BOOLEAN DEFAULT 1"))
+        db.session.execute(text("ALTER TABLE client ADD COLUMN portal_enabled BOOLEAN NOT NULL DEFAULT 1"))
         schema_changed = True
 
     if schema_changed:
         db.session.commit()
 
-    db.session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_client_portal_token ON client (portal_token)"))
+    index_names = {index.get("name") for index in inspect(db.engine).get_indexes("client")}
+    if "ix_client_portal_token" not in index_names:
+        db.session.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_client_portal_token
+                ON client (portal_token)
+                WHERE portal_token IS NOT NULL AND portal_token != ''
+                """
+            )
+        )
+        db.session.commit()
+
     db.session.execute(text("UPDATE client SET portal_enabled = 1 WHERE portal_enabled IS NULL"))
     db.session.commit()
 
-    clients_without_token = Client.query.filter(
+    had_missing_tokens = False
+    clients_without_token_query = Client.query.filter(
         db.or_(Client.portal_token.is_(None), Client.portal_token == "")
-    ).all()
-    for client in clients_without_token:
-        client.portal_token = _generate_client_portal_token(ignore_client_id=client.id)
+    ).order_by(Client.id.asc()).yield_per(200)
+    for client in clients_without_token_query:
+        had_missing_tokens = True
+        client.portal_token = _generate_client_portal_token(exclude_client_id=client.id)
 
     duplicate_tokens = db.session.execute(
         text(
@@ -405,12 +436,21 @@ def _ensure_client_portal_fields():
             """
         )
     ).scalars().all()
-    for token in duplicate_tokens:
-        clients_with_same_token = Client.query.filter_by(portal_token=token).order_by(Client.id.asc()).all()
-        for duplicate_client in clients_with_same_token[1:]:
-            duplicate_client.portal_token = _generate_client_portal_token(ignore_client_id=duplicate_client.id)
+    if duplicate_tokens:
+        duplicated_clients = (
+            Client.query
+            .filter(Client.portal_token.in_(duplicate_tokens))
+            .order_by(Client.portal_token.asc(), Client.id.asc())
+            .all()
+        )
+        duplicate_clients_by_token = defaultdict(list)
+        for duplicated_client in duplicated_clients:
+            duplicate_clients_by_token[duplicated_client.portal_token].append(duplicated_client)
+        for same_token_clients in duplicate_clients_by_token.values():
+            for duplicate_client in same_token_clients[1:]:
+                duplicate_client.portal_token = _generate_client_portal_token(exclude_client_id=duplicate_client.id)
 
-    if clients_without_token or duplicate_tokens:
+    if had_missing_tokens or duplicate_tokens:
         db.session.commit()
 
 
@@ -595,7 +635,7 @@ def login():
             session["user_id"] = user.id
             session["username"] = user.username
             session["role"] = user.role
-            session.pop("csrf_token", None)
+            session["csrf_token"] = secrets.token_urlsafe(32)
             return redirect(url_for("index"))
 
         error = "Неверное имя пользователя или пароль"
@@ -777,7 +817,7 @@ def add_client():
 def client_detail(id):
     client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
     if not client.portal_token:
-        client.portal_token = _generate_client_portal_token(ignore_client_id=client.id)
+        client.portal_token = _generate_client_portal_token(exclude_client_id=client.id)
         db.session.commit()
     cars = Car.query.filter_by(client_id=id, is_deleted=False).order_by(Car.id.desc()).all()
     portal_url = url_for("client_portal", portal_token=client.portal_token, _external=True)
@@ -787,8 +827,11 @@ def client_detail(id):
 @app.route("/client/<int:id>/portal/reset", methods=["POST"])
 @admin_required
 def reset_client_portal_token(id):
+    csrf_token = request.form.get("csrf_token", "")
+    if not csrf_token or not secrets.compare_digest(csrf_token, session.get("csrf_token", "")):
+        abort(403)
     client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
-    client.portal_token = _generate_client_portal_token(ignore_client_id=client.id)
+    client.portal_token = _generate_client_portal_token(exclude_client_id=client.id)
     db.session.commit()
     return redirect(url_for("client_detail", id=id))
 
@@ -796,10 +839,13 @@ def reset_client_portal_token(id):
 @app.route("/client/<int:id>/portal/access", methods=["POST"])
 @admin_required
 def set_client_portal_access(id):
+    csrf_token = request.form.get("csrf_token", "")
+    if not csrf_token or not secrets.compare_digest(csrf_token, session.get("csrf_token", "")):
+        abort(403)
     client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
     client.portal_enabled = request.form.get("portal_enabled") == "1"
     if client.portal_enabled and not client.portal_token:
-        client.portal_token = _generate_client_portal_token(ignore_client_id=client.id)
+        client.portal_token = _generate_client_portal_token(exclude_client_id=client.id)
     db.session.commit()
     return redirect(url_for("client_detail", id=id))
 

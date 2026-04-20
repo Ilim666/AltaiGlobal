@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Кабинет клиента — AltaiGlobal{% endblock %}
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h3 class="mb-1">👤 {{ client.fio }}</h3>
+            <div class="text-muted">{{ client.phone | fmt_phone }} · ИНН {{ client.inn }}</div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Сумма продаж</div>
+                    <div class="fs-4 fw-bold">{{ "%.2f"|format(total_sales_amount) }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Сумма оплат</div>
+                    <div class="fs-4 fw-bold">{{ "%.2f"|format(total_payments_amount) }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Текущий долг</div>
+                    <div class="fs-4 fw-bold {{ 'text-danger' if current_debt > 0 else 'text-success' }}">{{ "%.2f"|format(current_debt) }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white">📋 История продаж</div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Машина</th>
+                        <th>Литры</th>
+                        <th>Цена / л</th>
+                        <th>Сумма</th>
+                        <th>Тип оплаты</th>
+                        <th>Статус</th>
+                        <th>Оплачено</th>
+                        <th>Остаток</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in sales_rows %}
+                    <tr>
+                        <td>{{ row.sale.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <td>{{ row.sale.car.number if row.sale.car else '—' }}</td>
+                        <td>{{ row.sale.liters }}</td>
+                        <td>{{ row.sale.price_per_liter }}</td>
+                        <td><strong>{{ "%.2f"|format(row.sale.total) }}</strong></td>
+                        <td>{{ row.sale.payment_method or '—' }}</td>
+                        <td>
+                            {% if row.status == 'Оплачено' %}
+                                <span class="badge bg-success">{{ row.status }}</span>
+                            {% elif row.status == 'Частично' %}
+                                <span class="badge bg-warning text-dark">{{ row.status }}</span>
+                            {% else %}
+                                <span class="badge bg-danger">{{ row.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ "%.2f"|format(row.paid) }}</td>
+                        <td>{{ "%.2f"|format(row.remaining) }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">Продаж пока нет.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white">💳 История оплат</div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Сумма</th>
+                        <th>Метод</th>
+                        <th>Тип</th>
+                        <th>Продажа</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in payments %}
+                    <tr>
+                        <td>{{ p.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <td><strong>{{ "%.2f"|format(p.amount) }}</strong></td>
+                        <td>{{ p.payment_method or '—' }}</td>
+                        <td>{{ p.payment_type }}</td>
+                        <td>{% if p.sale_id %}#{{ p.sale_id }}{% else %}—{% endif %}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">Оплат пока нет.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

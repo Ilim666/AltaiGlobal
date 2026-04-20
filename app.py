@@ -1835,7 +1835,7 @@ def turnover():
     )
 
 
-def init_app():
+def init_db():
     with app.app_context():
         db.create_all()
         _ensure_daily_stock_tables()
@@ -1864,7 +1864,7 @@ def init_app():
         db.session.commit()
 
 
-init_app()
+init_db()
 
 
 if __name__ == "__main__":

@@ -7,6 +7,12 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     {% block extra_head %}{% endblock %}
     <style>
+        :root {
+            --sidebar-brand-size: 52px;
+            --sidebar-brand-radius: 12px;
+            --sidebar-brand-icon-size: 32px;
+            --sidebar-brand-spacing: 0.8rem;
+        }
         body { background-color: #f8f9fa; }
         .app-layout { display: flex; min-height: 100vh; }
         .sidebar {
@@ -16,10 +22,25 @@
             padding: 1.5rem 1rem;
             flex-shrink: 0;
         }
+        .sidebar-brand {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: var(--sidebar-brand-size);
+            height: var(--sidebar-brand-size);
+            border-radius: var(--sidebar-brand-radius);
+            background: rgba(255, 255, 255, 0.08);
+            margin-bottom: var(--sidebar-brand-spacing);
+        }
+        .sidebar-brand img {
+            width: var(--sidebar-brand-icon-size);
+            height: var(--sidebar-brand-icon-size);
+            display: block;
+        }
         .sidebar-title {
             font-size: 1.3rem;
             font-weight: 700;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
             color: #fff;
             text-decoration: none;
             display: block;
@@ -64,6 +85,9 @@
 {% if session.get("user_id") %}
 <div class="app-layout">
     <aside class="sidebar">
+        <a class="sidebar-brand" href="/" aria-label="AltaiGlobal">
+            <img src="{{ url_for('static', filename='img/logo-ag.svg') }}" alt="AG">
+        </a>
         <a class="sidebar-title" href="/">🚗 AltaiGlobal</a>
         <div class="small text-light mb-3">
             {{ session.get("username") }} ({{ session.get("role") }})

@@ -35,6 +35,9 @@
                     <th>Оператор</th>
                     <th>Остаток суммы</th>
                     <th>Дата и время оплаты</th>
+                    {% if session.get("role") == "admin" %}
+                    <th>Действия</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -75,6 +78,11 @@
                     <strong>{{ "%.2f"|format(remaining) }}</strong>
                 </td>
                 <td>{{ p.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                {% if session.get("role") == "admin" %}
+                <td>
+                    <a href="{{ url_for('edit_payment', payment_id=p.id) }}" class="btn btn-sm btn-outline-warning">✏️ Редактировать</a>
+                </td>
+                {% endif %}
             </tr>
             {% endfor %}
             </tbody>

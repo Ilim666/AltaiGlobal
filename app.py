@@ -1237,6 +1237,82 @@ def sales():
     )
 
 
+@app.route("/sales/<int:sale_id>/edit", methods=["GET", "POST"])
+@admin_required
+def edit_sale(sale_id):
+    sale = Sale.query.options(joinedload(Sale.car).joinedload(Car.client)).get_or_404(sale_id)
+    errors = {}
+    form = {
+        "liters": str(_to_decimal_2(sale.liters)),
+        "price_per_liter": str(_to_decimal_2(sale.price_per_liter)),
+        "payment_method": sale.payment_method or "",
+        "payment_amount": str(_to_decimal_2(sale.payment_amount)) if sale.payment_amount is not None else "",
+        "note": sale.note or "",
+    }
+
+    if request.method == "POST":
+        form["liters"] = request.form.get("liters", "").strip()
+        form["price_per_liter"] = request.form.get("price_per_liter", "").strip()
+        form["payment_method"] = request.form.get("payment_method", "").strip()
+        form["payment_amount"] = request.form.get("payment_amount", "").strip()
+        form["note"] = request.form.get("note", "").strip()
+
+        try:
+            liters = Decimal(form["liters"])
+            if liters <= 0:
+                raise ValueError
+            liters = _to_decimal_2(liters)
+        except (ValueError, TypeError, InvalidOperation):
+            errors["liters"] = "Введите корректное количество литров."
+            liters = None
+
+        try:
+            price = Decimal(form["price_per_liter"])
+            if price <= 0:
+                raise ValueError
+            price = _to_decimal_2(price)
+        except (ValueError, TypeError, InvalidOperation):
+            errors["price_per_liter"] = "Введите корректную цену за литр."
+            price = None
+
+        if form["payment_method"] not in PAYMENT_METHODS:
+            errors["payment_method"] = "Выберите корректный способ оплаты."
+
+        total = _to_decimal_2((liters or Decimal("0")) * (price or Decimal("0")))
+        payment_amount = None
+        if form["payment_method"] != "долг":
+            if not form["payment_amount"]:
+                errors["payment_amount"] = "Введите сумму оплаты."
+            else:
+                try:
+                    payment_amount = _to_decimal_2(Decimal(form["payment_amount"]))
+                    if payment_amount < 0 or payment_amount > total:
+                        raise ValueError
+                except (ValueError, TypeError, InvalidOperation):
+                    errors["payment_amount"] = "Сумма оплаты должна быть от 0 до суммы продажи."
+
+        if not errors:
+            sale.liters = liters
+            sale.price_per_liter = price
+            sale.total = total
+            sale.payment_method = form["payment_method"]
+            sale.payment_amount = payment_amount
+            sale.note = form["note"] or None
+            db.session.commit()
+            flash("Продажа успешно обновлена.", "success")
+            return redirect(url_for("sales_journal"))
+
+        flash("Не удалось обновить продажу. Проверьте поля формы.", "danger")
+
+    return render_template(
+        "edit_sale.html",
+        sale=sale,
+        errors=errors,
+        form=form,
+        payment_methods=PAYMENT_METHODS,
+    )
+
+
 def _build_sales_report_payload(start_date, end_date):
     start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
     sales = (
@@ -1756,6 +1832,127 @@ def payments():
         query = query.filter(Client.fio.ilike(f"%{q}%"))
     all_payments = query.all()
     return render_template("payments.html", payments=all_payments, q=q)
+
+
+@app.route("/payments/<int:payment_id>/edit", methods=["GET", "POST"])
+@admin_required
+def edit_payment(payment_id):
+    payment = Payment.query.options(
+        joinedload(Payment.sale).joinedload(Sale.car),
+        joinedload(Payment.client),
+        joinedload(Payment.paid_by_user),
+    ).get_or_404(payment_id)
+    allowed_payment_methods = ["наличка", "безнал", "доллар"]
+    users = User.query.order_by(User.username.asc()).all()
+    clients = Client.query.filter_by(is_deleted=False).order_by(Client.fio.asc()).all()
+    sales_rows = (
+        Sale.query.options(joinedload(Sale.car).joinedload(Car.client))
+        .order_by(Sale.created_at.desc())
+        .all()
+    )
+
+    errors = {}
+    form = {
+        "amount": str(_to_decimal_2(payment.amount)),
+        "payment_method": payment.payment_method or "",
+        "payment_type": payment.payment_type or "",
+        "sale_id": str(payment.sale_id) if payment.sale_id else "",
+        "client_id": str(payment.client_id),
+        "paid_by": str(payment.paid_by) if payment.paid_by else "",
+    }
+
+    if request.method == "POST":
+        form["amount"] = request.form.get("amount", "").strip()
+        form["payment_method"] = request.form.get("payment_method", "").strip()
+        form["payment_type"] = request.form.get("payment_type", "").strip()
+        form["sale_id"] = request.form.get("sale_id", "").strip()
+        form["client_id"] = request.form.get("client_id", "").strip()
+        form["paid_by"] = request.form.get("paid_by", "").strip()
+
+        try:
+            amount = _to_decimal_2(Decimal(form["amount"]))
+            if amount <= 0:
+                raise ValueError
+        except (ValueError, TypeError, InvalidOperation):
+            errors["amount"] = "Сумма должна быть больше 0."
+            amount = None
+
+        if form["payment_type"] not in PAYMENT_TYPES:
+            errors["payment_type"] = "Выберите корректный тип оплаты."
+
+        payment_method = form["payment_method"] or None
+        if payment_method and payment_method not in allowed_payment_methods:
+            errors["payment_method"] = "Выберите корректный способ оплаты."
+
+        sale = None
+        if form["sale_id"]:
+            try:
+                sale_id = int(form["sale_id"])
+            except (TypeError, ValueError):
+                sale_id = None
+            if not sale_id:
+                errors["sale_id"] = "Выберите корректную продажу."
+            else:
+                sale = Sale.query.options(joinedload(Sale.car)).get(sale_id)
+                if not sale:
+                    errors["sale_id"] = "Продажа не найдена."
+                elif not sale.car:
+                    errors["sale_id"] = "У выбранной продажи не найдена машина."
+
+        client = None
+        try:
+            client_id = int(form["client_id"])
+        except (TypeError, ValueError):
+            client_id = None
+        if not client_id:
+            errors["client_id"] = "Выберите клиента."
+        else:
+            client = Client.query.filter_by(id=client_id, is_deleted=False).first()
+            if not client:
+                errors["client_id"] = "Клиент не найден."
+
+        if sale and client and sale.car and sale.car.client_id != client.id:
+            errors["client_id"] = "Клиент должен соответствовать выбранной продаже."
+
+        paid_by = None
+        if form["paid_by"]:
+            try:
+                paid_by_id = int(form["paid_by"])
+            except (TypeError, ValueError):
+                paid_by_id = None
+            if not paid_by_id:
+                errors["paid_by"] = "Выберите корректного пользователя."
+            else:
+                paid_by_user = User.query.get(paid_by_id)
+                if not paid_by_user:
+                    errors["paid_by"] = "Пользователь не найден."
+                else:
+                    paid_by = paid_by_user.id
+
+        if not errors:
+            payment.amount = amount
+            payment.payment_method = payment_method
+            payment.payment_type = form["payment_type"]
+            payment.sale_id = sale.id if sale else None
+            payment.client_id = client.id
+            payment.paid_by = paid_by
+            db.session.commit()
+            flash("Платеж успешно обновлен.", "success")
+            return redirect(url_for("payments"))
+
+        flash("Не удалось обновить платеж. Проверьте поля формы.", "danger")
+
+    return render_template(
+        "edit_payment.html",
+        payment=payment,
+        errors=errors,
+        form=form,
+        payment_types=PAYMENT_TYPES,
+        payment_methods=allowed_payment_methods,
+        sales_rows=sales_rows,
+        clients=clients,
+        users=users,
+    )
 
 
 @app.route("/cash")

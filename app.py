@@ -1647,6 +1647,40 @@ def sales_journal():
     return render_template("sales_journal.html", sales=all_sales, q=q)
 
 
+@app.route("/edit-sale/<int:sale_id>", methods=["GET", "POST"])
+@admin_required
+def edit_sale(sale_id):
+    sale = Sale.query.get_or_404(sale_id)
+    errors = {}
+    if request.method == "POST":
+        try:
+            sale.liters = float(request.form["liters"])
+            sale.price_per_liter = float(request.form["price_per_liter"])
+            sale.payment_amount = float(request.form.get("payment_amount", 0))
+            sale.payment_method = request.form["payment_method"]
+            sale.note = request.form.get("note", "")
+            db.session.commit()
+            return redirect(url_for("sales_journal"))
+        except Exception as e:
+            errors["main"] = "Ошибка сохранения: " + str(e)
+    return render_template("edit_sale.html", sale=sale, errors=errors)
+
+@app.route("/edit-payment/<int:payment_id>", methods=["GET", "POST"])
+@admin_required
+def edit_payment(payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    errors = {}
+    if request.method == "POST":
+        try:
+            payment.amount = float(request.form["amount"])
+            payment.payment_method = request.form["payment_method"]
+            db.session.commit()
+            return redirect(url_for("payments"))
+        except Exception as e:
+            errors["main"] = "Ошибка сохранения: " + str(e)
+    return render_template("edit_payment.html", payment=payment, errors=errors)
+
+
 @app.route("/debts-journal")
 @login_required
 def debts_journal():

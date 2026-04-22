@@ -680,6 +680,16 @@ def admin_delete_user(user_id):
     return redirect(url_for("admin_users"))
 
 
+@app.route("/client-dashboard")
+def client_dashboard():
+    if session.get("role") != "client":
+        return redirect(url_for("client_auth"))
+    client_id = session.get("client_id")
+    sales = Sale.query.filter_by(client_id=client_id).all()
+    payments = Payment.query.filter_by(client_id=client_id).all()
+    return render_template("client_dashboard.html", sales=sales, payments=payments)
+
+
 @app.route("/add-client", methods=["GET", "POST"])
 @admin_required
 def add_client():

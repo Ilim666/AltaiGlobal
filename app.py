@@ -57,6 +57,10 @@ class Client(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     cars = db.relationship("Car", backref="client", lazy=True)
+    client.generate_token()
+
+    def generate_token(self):
+        self.token = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 
 class Car(db.Model):
@@ -790,6 +794,34 @@ def edit_client(id):
             return redirect(url_for("client_detail", id=id))
 
     return render_template("edit_client.html", client=client, errors=errors, form=form)
+
+
+@app.route("/generate-token", methods=["GET", "POST"])   # (примерно после edit_client)
+@admin_required
+def generate_token():
+    client_id = request.args.get("client_id")
+    client = Client.query.get_or_404(client_id)
+    token = None
+    if request.method == "POST":
+        client.generate_token()
+        db.session.commit()
+        token = client.token
+    return render_template("generate_token.html", client=client, token=token)
+
+
+@app.route("/client-auth", methods=["GET", "POST"])
+def client_auth():
+    if request.method == "POST":
+        token = request.form.get("token", "").upper().strip()
+        client = Client.query.filter_by(token=token).first()
+        if client:
+            session.clear()
+            session["client_id"] = client.id
+            session["role"] = "client"
+            return redirect(url_for("client_dashboard"))
+        else:
+            return render_template("client_auth.html", error="Токен не верный")
+    return render_template("client_auth.html")
 
 
 @app.route("/delete-client/<int:id>", methods=["POST"])

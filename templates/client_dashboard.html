@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Ваши продажи</h2>
+<ul>
+    {% for sale in sales %}
+    <li>{{ sale.created_at }} — {{ sale.liters }} л на сумму {{ sale.price_per_liter * sale.liters }}</li>
+    {% endfor %}
+</ul>
+<h2>Ваши оплаты</h2>
+<ul>
+    {% for pay in payments %}
+    <li>{{ pay.created_at }} — {{ pay.amount }}</li>
+    {% endfor %}
+</ul>
+<form action="{{ url_for('client_logout') }}" method="post">
+  <button type="submit" class="btn btn-link">Выйти</button>
+</form>
+{% endblock %}

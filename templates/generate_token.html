@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+    <h2>Генерация токена для клиента</h2>
+    <p><b>Клиент:</b> {{ client.fio }}</p>
+    {% if token %}
+        <div class="alert alert-success fw-bold">Токен: {{ token }}</div>
+        <div>Отправьте клиенту ссылку: <code>{{ request.url_root }}client-auth</code> (там он введёт этот токен)</div>
+    {% else %}
+        <form method="post">
+            <button type="submit" class="btn btn-primary">Сгенерировать токен</button>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

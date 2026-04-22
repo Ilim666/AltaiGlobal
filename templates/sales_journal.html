@@ -35,6 +35,9 @@
                     <th>Оператор</th>
                     <th>Остаток суммы</th>
                     <th>Примечание</th>
+                    {% if session.get("role") == 'admin' %}
+                    <th></th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>

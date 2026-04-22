@@ -57,8 +57,8 @@ class Client(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     cars = db.relationship("Car", backref="client", lazy=True)
-    client.generate_token()
-
+    token = db.Column(db.String(6), unique=True)  # <-- ЭТО строку обязательно!
+    
     def generate_token(self):
         import random, string
         self.token = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))

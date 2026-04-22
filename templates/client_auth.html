@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+    <h2>Вход клиента по токену</h2>
+    {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    <form method="post">
+        <label class="form-label">Введите токен</label>
+        <input type="text" name="token" maxlength="6" class="form-control" required>
+        <button class="btn btn-success mt-3" type="submit">Войти</button>
+    </form>
+</div>
+{% endblock %}

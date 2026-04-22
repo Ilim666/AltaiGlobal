@@ -60,6 +60,7 @@ class Client(db.Model):
     client.generate_token()
 
     def generate_token(self):
+        import random, string
         self.token = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 

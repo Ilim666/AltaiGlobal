@@ -686,8 +686,11 @@ def client_dashboard():
     if session.get("role") != "client":
         return redirect(url_for("client_auth"))
     client_id = session.get("client_id")
-    sales = Sale.query.filter_by(client_id=client_id).all()
-    payments = Payment.query.filter_by(client_id=client_id).all()
+    # Получаем все продажи клиента через его машины:
+    sales = Sale.query.join(Car).filter(Car.client_id == client_id).all()
+    # Оплаты вероятно связаны с продажей или также с машиной/клиентом
+    payments = Payment.query.join(Sale).join(Car).filter(Car.client_id == client_id).all()
+    # Если у payments есть прямой client_id — используй filter_by(client_id=client_id), если нет — аналогично sales
     return render_template("client_dashboard.html", sales=sales, payments=payments)
 
 

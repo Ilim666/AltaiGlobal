@@ -1685,7 +1685,7 @@ def edit_payment(payment_id):
             return redirect(url_for("payments"))
         except Exception as e:
             errors["main"] = "Ошибка сохранения: " + str(e)
-    return render_template("edit_payment.html", payment=payment, errors=errors)
+    return render_template("edit_pay.html", payment=payment, errors=errors)
 
 
 @app.route("/debts-journal")

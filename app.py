@@ -1660,11 +1660,14 @@ def edit_sale(sale_id):
             sale.payment_amount = float(request.form.get("payment_amount", 0))
             sale.payment_method = request.form["payment_method"]
             sale.note = request.form.get("note", "")
+            created_at_str = request.form.get("created_at")
+            sale.created_at = datetime.strptime(created_at_str, "%Y-%m-%dT%H:%M")
             db.session.commit()
             return redirect(url_for("sales_journal"))
         except Exception as e:
             errors["main"] = "Ошибка сохранения: " + str(e)
     return render_template("edit_sale.html", sale=sale, errors=errors)
+
 
 @app.route("/edit-payment/<int:payment_id>", methods=["GET", "POST"])
 @admin_required
@@ -1675,6 +1678,9 @@ def edit_payment(payment_id):
         try:
             payment.amount = float(request.form["amount"])
             payment.payment_method = request.form["payment_method"]
+            created_at_str = request.form.get("created_at")
+            if created_at_str:
+                payment.created_at = datetime.strptime(created_at_str, "%Y-%m-%dT%H:%M")
             db.session.commit()
             return redirect(url_for("payments"))
         except Exception as e:

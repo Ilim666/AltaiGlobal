@@ -1,18 +1,80 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Ваши продажи</h2>
-<ul>
-    {% for sale in sales %}
-    <li>{{ sale.created_at }} — {{ sale.liters }} л на сумму {{ sale.price_per_liter * sale.liters }}</li>
-    {% endfor %}
-</ul>
-<h2>Ваши оплаты</h2>
-<ul>
-    {% for pay in payments %}
-    <li>{{ pay.created_at }} — {{ pay.amount }}</li>
-    {% endfor %}
-</ul>
-<form action="{{ url_for('client_logout') }}" method="post">
-  <button type="submit" class="btn btn-link">Выйти</button>
-</form>
+<div class="container py-3">
+    <h2 class="mb-4 text-center">Ваши покупки</h2>
+
+    {% if sales %}
+        {% set total_debt = 0 %}
+        <div class="row g-3">
+            {% for sale in sales %}
+            {% set paid = sale.payment_amount or 0 %}
+            {% set remaining = (sale.total or (sale.price_per_liter or 0) * (sale.liters or 0)) - paid %}
+            {% set total_debt = total_debt + remaining %}
+            <div class="col-12">
+                <div class="card shadow-sm {% if remaining > 0 %}border-danger{% else %}border-success{% endif %}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="mb-2 small text-muted">{{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '-' }}</div>
+                                <div>
+                                    <b>Машина:</b> {{ sale.car.number if sale.car else '-' }}<br>
+                                    <b>Объем:</b> {{ sale.liters or 0 }} л<br>
+                                    <b>Сумма:</b> {{ "%.2f"|format(sale.total or (sale.price_per_liter or 0) * (sale.liters or 0)) }} ₽<br>
+                                    <b>Оплачено:</b> {{ "%.2f"|format(paid) }} ₽<br>
+                                </div>
+                                <div>
+                                    <b>Остаток:</b>
+                                    {% if remaining <= 0 %}
+                                        <span class="badge bg-success">Нет долга</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">{{ "%.2f"|format(remaining) }} ₽</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <div class="col-12 mt-3">
+                <div class="card card-body bg-light text-end fs-5 fw-bold">
+                  Общий долг: 
+                  {% if total_debt > 0 %}
+                    <span class="text-danger">{{ '%.2f'|format(total_debt) }} ₽</span>
+                  {% else %}
+                    <span class="text-success">0 ₽</span>
+                  {% endif %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="alert alert-info text-center mb-4">Покупок пока нет.</div>
+    {% endif %}
+
+    <h2 class="my-4 text-center">Ваши оплаты</h2>
+    {% if payments %}
+        <div class="row g-3">
+            {% for pay in payments %}
+            <div class="col-12">
+                <div class="card card-body">
+                    <div>
+                        <b>Дата:</b> {{ pay.created_at.strftime('%d.%m.%Y %H:%M') if pay.created_at else '-' }}<br>
+                        <b>Сумма:</b> {{ "%.2f"|format(pay.amount or 0) }} ₽<br>
+                        {% if pay.payment_method %}
+                        <b>Способ:</b> {{ pay.payment_method|capitalize }}<br>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info text-center">Оплат пока нет.</div>
+    {% endif %}
+
+    <form class="mt-4 text-center" action="{{ url_for('client_logout') }}" method="post">
+      <button type="submit" class="btn btn-lg btn-outline-secondary w-100 py-2">Вы��ти</button>
+    </form>
+</div>
 {% endblock %}

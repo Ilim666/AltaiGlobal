@@ -1773,6 +1773,9 @@ def debts_journal():
 @app.route("/debts-by-client")
 @login_required
 def debts_by_client():
+    if session.get("role") not in ["admin", "operator"]:
+        abort(403)
+
     q = request.args.get("q", "").strip()
     debt_sales = (
         Sale.query
@@ -1782,7 +1785,7 @@ def debts_by_client():
         .filter((Sale.total - db.func.coalesce(Sale.payment_amount, 0.0)) > 0)
         .all()
     )
-
+    
     clients_map = {}
     for sale in debt_sales:
         client = sale.car.client

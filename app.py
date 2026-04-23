@@ -1963,7 +1963,7 @@ def turnover():
     )
 
 
-if __name__ == "__main__":
+def init_db():
     with app.app_context():
         db.create_all()
         _ensure_daily_stock_tables()
@@ -1991,4 +1991,9 @@ if __name__ == "__main__":
 
         db.session.commit()
 
+
+init_db()
+
+
+if __name__ == "__main__":
     app.run(debug=os.getenv("FLASK_DEBUG", "False") == "True")

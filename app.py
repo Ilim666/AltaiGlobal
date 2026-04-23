@@ -689,11 +689,11 @@ def client_dashboard():
     sales = Sale.query.join(Car).filter(Car.client_id == client_id).all()
     payments = Payment.query.join(Sale).join(Car).filter(Car.client_id == client_id).all()
     def calc_debt(sale):
-        summa = getattr(sale, 'total', None)
-        if summa is None:
-            summa = (sale.price_per_liter or 0) * (sale.liters or 0)
+        total = getattr(sale, 'total', None)
+        if total is None:
+            total = (sale.price_per_liter or 0) * (sale.liters or 0)
         paid = getattr(sale, 'payment_amount', 0) or 0
-        return max(0, summa - paid)
+        return max(0, total - paid)
     total_debt = sum(calc_debt(sale) for sale in sales)
     return render_template(
         "client_dashboard.html",

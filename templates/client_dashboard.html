@@ -2,6 +2,22 @@
 {% block content %}
 <div class="container py-3">
 
+    <!-- Список машин клиента -->
+    <h2 class="text-center mt-4">Ваши машины</h2>
+    {% if cars %}
+    <ul class="list-group mb-4">
+        {% for car in cars %}
+        <li class="list-group-item">
+            <b>Номер:</b> {{ car.number }},
+            <b>Бренд:</b> {{ car.brand }},
+            <b>Цвет:</b> {{ car.color }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="alert alert-info">У вас пока нет машин.</div>
+    {% endif %}
+
     <h2 class="mb-4 text-center">Ваши покупки</h2>
     {% if sales %}
         <div class="row g-3">
@@ -20,6 +36,7 @@
                                 <div>
                                     <b>Машина:</b> {{ sale.car.number if sale.car else '-' }}<br>
                                     <b>Объем:</b> {{ sale.liters or 0 }} л<br>
+                                    <b>Цена за литр:</b> {{ "%.2f"|format(sale.price_per_liter or 0) }} ₽<br>
                                     <b>Сумма:</b> {{ "%.2f"|format(sum) }} ₽<br>
                                     <b>Оплачено:</b> {{ "%.2f"|format(paid) }} ₽<br>
                                 </div>
@@ -42,7 +59,7 @@
             <div class="card card-body bg-light text-end fs-5 fw-bold">
               Общий долг:
               {% if total_debt > 0 %}
-                <span class="text-danger">{{ '%.2f'|format(total_debt) }} ₽</span>
+                <span class="text-danger">{{ "%.2f"|format(total_debt) }} ₽</span>
               {% else %}
                 <span class="text-success">0 ₽</span>
               {% endif %}

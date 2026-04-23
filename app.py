@@ -20,7 +20,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+uri = os.environ.get("DATABASE_URL", "")
+if uri.startswith("postgres://"):
+    uri = uri.replace("postgres://", "postgresql://", 1)
+if not uri:
+    raise RuntimeError("DATABASE_URL is not set! Обязательно добавь переменную в Railway.")
+app.config["SQLALCHEMY_DATABASE_URI"] = uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 db = SQLAlchemy(app)
@@ -1996,3 +2001,6 @@ if __name__ == "__main__":
         db.session.commit()
 
     app.run(debug=os.getenv("FLASK_DEBUG", "False") == "True")
+
+with app.app_context():
+    db.create_all()

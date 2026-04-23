@@ -43,8 +43,6 @@ def fmt_phone(phone):
 app.jinja_env.filters["fmt_phone"] = fmt_phone
 
 
-# ── Models ────────────────────────────────────────────────────────────────────
-
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
@@ -58,11 +56,11 @@ class Client(db.Model):
     fio = db.Column(db.String(100), unique=True, nullable=False)
     phone = db.Column(db.String(10), nullable=False)
     inn = db.Column(db.String(14), nullable=False)
-    is_deleted = db.Column(db.Boolean, default=False, server_default=text("0"), nullable=False)
+    is_deleted = db.Column(db.Boolean, default=False, server_default=text("false"), nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     cars = db.relationship("Car", backref="client", lazy=True)
-    token = db.Column(db.String(6), unique=True)  # <-- ЭТО строку обязательно!
+    token = db.Column(db.String(6), unique=True)
     
     def generate_token(self):
         import random, string
@@ -77,7 +75,7 @@ class Car(db.Model):
     color = db.Column(db.String(50), nullable=False)
     note = db.Column(db.Text, nullable=True)
     stock = db.Column(db.Numeric(10, 2), default=0)
-    is_deleted = db.Column(db.Boolean, default=False, server_default=text("0"), nullable=False)
+    is_deleted = db.Column(db.Boolean, default=False, server_default=text("false"), nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     sales = db.relationship("Sale", backref="car", lazy=True)
@@ -152,8 +150,6 @@ class Payment(db.Model):
     client = db.relationship("Client", backref=db.backref("payments", lazy=True))
     paid_by_user = db.relationship("User", foreign_keys=[paid_by], lazy="joined")
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def login_required(f):
     @wraps(f)
@@ -532,7 +528,6 @@ with app.app_context():
     _ensure_sale_payment_user_columns()
     _ensure_liters_numeric_columns()
 
-    # Миграция старых пользователей
     legacy_users = User.query.all()
     for legacy_user in legacy_users:
         if not (legacy_user.password or "").startswith(("pbkdf2:", "scrypt:")):
@@ -541,7 +536,6 @@ with app.app_context():
     admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD") or "admin123"
     operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD") or "operator123"
 
-    # Добавление пользователей по умолчанию
     if not User.query.filter_by(username="admin").first():
         admin = User(username="admin", password=generate_password_hash(admin_password), role="admin")
         db.session.add(admin)
@@ -554,8 +548,6 @@ with app.app_context():
 
     db.session.commit()
 
-
-# ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -830,7 +822,7 @@ def edit_client(id):
     return render_template("edit_client.html", client=client, errors=errors, form=form)
 
 
-@app.route("/generate-token", methods=["GET", "POST"])   # (примерно после edit_client)
+@app.route("/generate-token", methods=["GET", "POST"])
 @admin_required
 def generate_token():
     client_id = request.args.get("client_id")
@@ -995,8 +987,6 @@ def delete_car(id):
     return redirect(url_for("client_detail", id=client_id))
 
 
-# ── Validation API ─────────────────────────────────────────────────────────────
-
 @app.route("/api/check-fio", methods=["POST"])
 @admin_required
 def check_fio():
@@ -1112,8 +1102,6 @@ def set_daily_stock():
         "added_liters": str(liters),
     })
 
-
-# ── Sales ─────────────────────────────────────────────────────────────────────
 
 @app.route("/api/car-search")
 @login_required

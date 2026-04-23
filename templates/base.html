@@ -61,69 +61,61 @@
     </style>
 </head>
 <body>
-
+{% if session.get("user_id") %}
 <div class="app-layout">
-
-    {% if session.get("user_id") %}
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <a class="sidebar-title" href="/">🚗 AltaiGlobal</a>
-            <div class="small text-light mb-3">
-                {{ session.get("username") }} ({{ session.get("role") }})
-                <div class="mt-2">
-                    <a href="{{ url_for('logout') }}" class="btn btn-sm btn-danger">Выход</a>
-                </div>
+    <aside class="sidebar">
+        <a class="sidebar-title" href="/">🚗 AltaiGlobal</a>
+        <div class="small text-light mb-3">
+            {{ session.get("username") }} ({{ session.get("role") }})
+            <div class="mt-2">
+                <a href="{{ url_for('logout') }}" class="btn btn-sm btn-danger">Выход</a>
             </div>
-
-            <nav class="nav flex-column">
-                <span class="nav-section-label">Клиенты</span>
-                <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">👥 Список клиентов</a>
-
-                {% if session.get("role") == "admin" %}
-                    <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">➕ Добавить клиента</a>
-                {% endif %}
-
-                {% if session.get("role") in ["admin", "operator"] %}
-                    <span class="nav-section-label">Долги</span>
-                    <a class="nav-link {% if request.path == '/debts-by-client' %}active{% endif %}" href="/debts-by-client">
-                        💰 Долги по клиентам
-                    </a>
-                {% endif %}
-            </nav>
-        </aside>
-    {% endif %}
-
-    <!-- MAIN CONTENT (единый блок) -->
-    <main class="main-content {% if not session.get('user_id') %}d-flex align-items-center justify-content-center{% endif %}"
-          style="{% if not session.get('user_id') %}min-height: 100vh;{% endif %}">
-
-        {% if not session.get("user_id") %}
-            <div class="container" style="max-width: 420px;">
-        {% endif %}
-
+        </div>
+        <nav class="nav flex-column">
+            <span class="nav-section-label">Клиенты</span>
+            <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">👥 Список клиентов</a>
+            {% if session.get("role") == "admin" %}
+                <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">➕ Добавить клиента</a>
+            {% endif %}
+            {% if session.get("role") in ["admin", "operator"] %}
+                <span class="nav-section-label">Долги</span>
+                <a class="nav-link {% if request.path == '/debts-by-client' %}active{% endif %}" href="/debts-by-client">
+                    💰 Долги по клиентам
+                </a>
+            {% endif %}
+            {# здесь могут быть другие пункты меню #}
+        </nav>
+    </aside>
+    <main class="main-content">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+                </div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
-
         {% block content %}{% endblock %}
-
-        {% if not session.get("user_id") %}
-            </div>
-        {% endif %}
-
     </main>
-
 </div>
-
+{% else %}
+<div class="container" style="max-width: 420px; padding-top: 40px;">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+</div>
+{% endif %}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 {% block extra_js %}{% endblock %}
-
 </body>
 </html>

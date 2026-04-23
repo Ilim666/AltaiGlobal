@@ -1989,6 +1989,3 @@ if __name__ == "__main__":
         db.session.commit()
 
     app.run(debug=os.getenv("FLASK_DEBUG", "False") == "True")
-
-with app.app_context():
-    db.create_all()

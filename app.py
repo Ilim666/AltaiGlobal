@@ -694,6 +694,12 @@ def client_dashboard():
     return render_template("client_dashboard.html", sales=sales, payments=payments)
 
 
+@app.route("/client-logout", methods=["POST"])
+def client_logout():
+    session.clear()
+    return redirect(url_for("client_auth"))
+
+
 @app.route("/add-client", methods=["GET", "POST"])
 @admin_required
 def add_client():

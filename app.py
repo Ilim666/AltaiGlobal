@@ -1771,7 +1771,7 @@ def debts_journal():
 
 
 @app.route("/debts-by-client")
-@admin_required
+@login_required
 def debts_by_client():
     q = request.args.get("q", "").strip()
     debt_sales = (

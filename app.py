@@ -686,12 +686,21 @@ def client_dashboard():
     if session.get("role") != "client":
         return redirect(url_for("client_auth"))
     client_id = session.get("client_id")
-    # Получаем все продажи клиента через его машины:
     sales = Sale.query.join(Car).filter(Car.client_id == client_id).all()
-    # Оплаты вероятно связаны с продажей или также с машиной/клиентом
     payments = Payment.query.join(Sale).join(Car).filter(Car.client_id == client_id).all()
-    # Если у payments есть прямой client_id — используй filter_by(client_id=client_id), если нет — аналогично sales
-    return render_template("client_dashboard.html", sales=sales, payments=payments)
+    def calc_debt(sale):
+        summa = getattr(sale, 'total', None)
+        if summa is None:
+            summa = (sale.price_per_liter or 0) * (sale.liters or 0)
+        paid = getattr(sale, 'payment_amount', 0) or 0
+        return max(0, summa - paid)
+    total_debt = sum(calc_debt(sale) for sale in sales)
+    return render_template(
+        "client_dashboard.html",
+        sales=sales,
+        payments=payments,
+        total_debt=total_debt
+    )
 
 
 @app.route("/client-logout", methods=["POST"])

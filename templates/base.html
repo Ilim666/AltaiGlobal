@@ -90,8 +90,9 @@
 
             <span class="nav-section-label">Долги</span>
             <a class="nav-link {% if request.path == '/debts-journal' %}active{% endif %}" href="/debts-journal">📋 Журнал долгов</a>
-            {% if session.get("role") == "admin" %}
-                <a class="nav-link {% if request.path == '/debts-by-client' %}active{% endif %}" href="/debts-by-client">💰 Долги по клиентам</a>
+            {% if session.get("role") in ["admin", "operator"] %}
+                <a class="nav-link {% if request.path == '/debts-by-client' %}active{% endif %}" href="/debts-by-client">💰 Долги по клиентам
+                </a>
             {% endif %}
 
             <span class="nav-section-label">Оплаты</span>

@@ -29,9 +29,9 @@ app.config["SQLALCHEMY_DATABASE_URI"] = uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 db = SQLAlchemy(app)
-TZ = pytz.timezone(os.getenv("TZ", "Asia/Almaty"))
+TZ = pytz.timezone(os.getenv("TZ", "Asia/Bishkek"))
 
-TZ = pytz.timezone("Asia/Almaty")
+TZ = pytz.timezone("Asia/Bishkek")
 
 def fmt_dt_local(dt):
     if not dt:

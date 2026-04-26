@@ -49,7 +49,7 @@
                 <td>{{ car.client.phone | fmt_phone }}</td>
                 <td>{{ car.client.inn }}</td>
                 <td>{{ car.note or '—' }}</td>
-                <td>{{ car.created_at.strftime('%d.%m.%Y') }}</td>
+                <td>{{ car.created_at|dt_kz }}</td>
                 <td>
                     {% if session.get('role') == 'admin' %}
                     <a href="/edit-car/{{ car.id }}" class="btn btn-sm btn-outline-warning" title="Редактировать">✏️</a>

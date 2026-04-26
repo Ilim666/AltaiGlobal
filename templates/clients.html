@@ -8,6 +8,17 @@
     {% endif %}
 </div>
 
+<!-- Форма поиска -->
+<form method="get" action="/clients" class="mb-4">
+    <div class="input-group">
+        <input type="text" name="q" class="form-control" placeholder="Поиск по ФИО или телефону…" value="{{ q or '' }}">
+        <button class="btn btn-outline-secondary" type="submit">🔍 Найти</button>
+        {% if q %}
+        <a href="/clients" class="btn btn-outline-danger">✕ Сбросить</a>
+        {% endif %}
+    </div>
+</form>
+
 {% if clients %}
 <div class="card shadow-sm">
     <div class="table-responsive">

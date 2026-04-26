@@ -11,6 +11,8 @@ from datetime import datetime
 import pytz
 from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_sqlalchemy import SQLAlchemy
+from flask import request
+from sqlalchemy import or_
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -603,8 +605,17 @@ def index():
 @app.route("/clients")
 @login_required
 def clients():
-    all_clients = Client.query.filter_by(is_deleted=False).order_by(Client.id.desc()).all()
-    return render_template("clients.html", clients=all_clients)
+    q = request.args.get("q", "").strip()
+    query = Client.query.filter_by(is_deleted=False)
+    if q:
+        query = query.filter(
+            or_(
+                Client.fio.ilike(f"%{q}%"),
+                Client.phone.ilike(f"%{q}%")
+            )
+        )
+    all_clients = query.order_by(Client.id.desc()).all()
+    return render_template("clients.html", clients=all_clients, q=q)
 
 
 @app.route("/admin/users")
@@ -976,8 +987,13 @@ def cars():
         .join(Car.client)
         .filter(Client.is_deleted.is_(False))
     )
-    if q:
-        query = query.filter(Client.fio.ilike(f"%{q}%"))
+if q:
+    query = query.filter(
+        or_(
+            Client.fio.ilike(f"%{q}%"),
+            Car.number.ilike(f"%{q}%")
+        )
+    )
     all_cars = query.order_by(Car.id.desc()).all()
     return render_template("cars.html", cars=all_cars, q=q)
 

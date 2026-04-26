@@ -9,6 +9,14 @@ from functools import wraps
 from datetime import datetime
 
 import pytz
+TZ = pytz.timezone("Asia/Almaty")
+
+def fmt_dt_local(dt):
+    if not dt:
+        return "-"
+    return dt.astimezone(TZ).strftime('%d.%m.%Y %H:%M')
+
+app.jinja_env.filters['dt_kz'] = fmt_dt_local
 from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from openpyxl import Workbook

@@ -45,7 +45,7 @@
                             <span class="badge bg-info">Оператор</span>
                         {% endif %}
                     </td>
-                    <td>{{ user.created_at.strftime('%d.%m.%Y %H:%M') if user.created_at else '-' }}</td>
+                    <td>{{ user.created_at|dt_kz }}</td>
                     <td>
                         <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" class="btn btn-sm btn-warning">✏️ Редактировать</a>
                         {% if user.id != session.get('user_id') %}

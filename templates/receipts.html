@@ -94,7 +94,7 @@
             <tbody>
             {% for r in receipts %}
                 <tr>
-                    <td>{{ r.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                    <td>{{ r.created_at|dt_kz }}</td>
                     <td>{{ r.car.number }} — {{ r.car.client.fio }}</td>
                     <td>{{ "%.2f"|format(r.liters|float) }}</td>
                     <td>{{ "%.2f"|format(r.amount|float) }}</td>

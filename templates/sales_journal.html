@@ -43,7 +43,7 @@
             <tbody>
             {% for s in sales %}
             <tr>
-                <td>{{ s.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>{{ s.created_at|dt_kz }}</td>
                 <td>
                     <a href="/client/{{ s.car.client.id }}" class="text-decoration-none">
                         {{ s.car.client.fio }}

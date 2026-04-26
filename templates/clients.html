@@ -31,7 +31,7 @@
                 <td>{{ c.phone | fmt_phone }}</td>
                 <td>{{ c.inn }}</td>
                 <td><span class="badge bg-secondary">{{ c.cars|length }}</span></td>
-                <td>{{ c.created_at.strftime('%d.%m.%Y') }}</td>
+                <td>{{ c.created_at|dt_kz }}</td>
                 <td onclick="event.stopPropagation()">
                     <a href="/client/{{ c.id }}" class="btn btn-sm btn-outline-info" title="Детали">👁</a>
                     {% if session.get('role') == 'admin' %}

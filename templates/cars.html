@@ -10,7 +10,7 @@
 
 <form method="get" action="/cars" class="mb-4">
     <div class="input-group">
-        <input type="text" name="q" class="form-control" placeholder="Поиск по ФИО клиента…" value="{{ q or '' }}">
+        <input type="text" name="q" class="form-control" placeholder="Поиск по ФИО или номеру машины…" value="{{ q or '' }}">
         <button class="btn btn-outline-secondary" type="submit">🔍 Найти</button>
         {% if q %}
         <a href="/cars" class="btn btn-outline-danger">✕ Сбросить</a>

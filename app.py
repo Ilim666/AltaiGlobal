@@ -987,13 +987,13 @@ def cars():
         .join(Car.client)
         .filter(Client.is_deleted.is_(False))
     )
-if q:
-    query = query.filter(
-        or_(
-            Client.fio.ilike(f"%{q}%"),
-            Car.number.ilike(f"%{q}%")
+    if q:
+        query = query.filter(
+            or_(
+                Client.fio.ilike(f"%{q}%"),
+                Car.number.ilike(f"%{q}%")
+            )
         )
-    )
     all_cars = query.order_by(Car.id.desc()).all()
     return render_template("cars.html", cars=all_cars, q=q)
 

@@ -683,6 +683,16 @@ def admin_edit_user(user_id):
     return render_template("admin/edit_user.html", user=user)
 
 
+@app.route("/delete-sale/<int:id>", methods=["POST"])
+@admin_required
+def delete_sale(id):
+    sale = Sale.query.filter_by(id=id, is_deleted=False).first_or_404()
+    sale.is_deleted = True
+    sale.deleted_at = datetime.now(TZ)
+    db.session.commit()
+    return redirect(url_for("sales_journal"))
+
+
 @app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
 @admin_required
 def admin_delete_user(user_id):

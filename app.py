@@ -617,6 +617,13 @@ def clients():
     all_clients = query.order_by(Client.id.desc()).all()
     return render_template("clients.html", clients=all_clients, q=q)
 
+@app.route("/delete-sale/<int:id>", methods=["POST"])
+@admin_required
+def delete_sale(id):
+    sale = Sale.query.filter_by(id=id).first_or_404()
+    db.session.delete(sale)
+    db.session.commit()
+    return redirect(url_for("sales_journal"))
 
 @app.route("/admin/users")
 @admin_required

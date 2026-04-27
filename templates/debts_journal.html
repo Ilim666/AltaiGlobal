@@ -30,5 +30,145 @@
 <div class="card shadow-sm">
     <div class="table-responsive">
         <table class="table table-hover mb-0">
-            <thead class="table
-
+            <thead class="table-dark">
+                <tr>
+                    <th>Дата</th>
+                    <th>Клиент</th>
+                    <th>Номер машины</th>
+                    <th>Сумма долга</th>
+                    <th>Оплачено</th>
+                    <th>Остаток</th>
+                    <th>Статус</th>
+                    <th>Примечание</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for s in sales %}
+            {% set paid = s.payment_amount or 0 %}
+            {% set remaining = s.total - paid %}
+            <tr>
+                <td>{{ s.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>
+                    <a href="/client/{{ s.car.client.id }}" class="text-decoration-none">
+                        {{ s.car.client.fio }}
+                    </a>
+                </td>
+                <td><strong>{{ s.car.number }}</strong></td>
+                <td><strong>{{ "%.2f"|format(s.total) }}</strong></td>
+                <td>{{ "%.2f"|format(paid) }}</td>
+                <td><strong>{{ "%.2f"|format(remaining) }}</strong></td>
+                <td>
+                    {% if remaining <= 0 %}
+                        <span class="badge bg-success">Погашено</span>
+                    {% else %}
+                        <span class="badge bg-danger">Долг активен</span>
+                    {% endif %}
+                </td>
+                <td>{{ s.note or '—' }}</td>
+                <td>
+                    {% if remaining > 0 %}
+                    <button type="button" class="btn btn-sm btn-success"
+                            data-bs-toggle="modal" data-bs-target="#payModal"
+                            data-sale-id="{{ s.id }}"
+                            data-remaining="{{ "%.2f"|format(remaining) }}"
+                            data-client="{{ s.car.client.fio }}"
+                            data-client-id="{{ s.car.client.id }}">
+                        Оплатить
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    {% if q %}
+    По запросу «{{ q }}» долгов не найдено. <a href="/debts-journal">Показать все</a>.
+    {% elif client_id %}
+    У этого клиента нет долгов. <a href="/debts-journal">Показать все</a>.
+    {% else %}
+    Долгов пока нет.
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Payment Modal -->
+<div class="modal fade" id="payModal" tabindex="-1" aria-labelledby="payModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="payModalLabel">Оплата долга</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <form method="post" id="payForm" action="">
+                <div class="modal-body">
+                    <p class="mb-1">Клиент: <strong id="modalClient"></strong></p>
+                    <p class="mb-3">Остаток: <strong id="modalRemaining"></strong></p>
+                    <div class="mb-3">
+                        <label for="payMethod" class="form-label">Способ оплаты</label>
+                        <select name="payment_method" id="payMethod" class="form-select" required>
+                            <option value="" disabled selected>Выберите способ...</option>
+                            <option value="наличка">Наличка</option>
+                            <option value="безнал">Безнал</option>
+                            <option value="доллар">Доллар</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="payAmount" class="form-label">Сумма оплаты</label>
+                        <input type="number" step="0.01" min="0.01" name="amount"
+                               id="payAmount" class="form-control" required>
+                    </div>
+                    <input type="hidden" name="client_id" id="modalClientId" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success">Оплатить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.getElementById('payModal').addEventListener('show.bs.modal', function (event) {
+    var btn = event.relatedTarget;
+    var saleId = btn.getAttribute('data-sale-id');
+    var remaining = parseFloat(btn.getAttribute('data-remaining'));
+    var client = btn.getAttribute('data-client');
+    var client_id = btn.getAttribute('data-client-id');
+    document.getElementById('modalClient').textContent = client;
+    document.getElementById('modalRemaining').textContent = btn.getAttribute('data-remaining');
+    var amountInput = document.getElementById('payAmount');
+    amountInput.value = remaining;
+    amountInput.max = remaining;
+    document.getElementById('payMethod').value = '';
+    document.getElementById('payForm').action = '/pay-debt/' + saleId;
+    document.getElementById('modalClientId').value = client_id;
+});
+
+document.getElementById('payForm').addEventListener('submit', function (e) {
+    var amountInput = document.getElementById('payAmount');
+    var val = parseFloat(amountInput.value);
+    var max = parseFloat(amountInput.max);
+    if (isNaN(val) || val <= 0) {
+        e.preventDefault();
+        amountInput.setCustomValidity('Введите корректную сумму оплаты.');
+        amountInput.reportValidity();
+        return;
+    }
+    if (val > max) {
+        e.preventDefault();
+        amountInput.setCustomValidity('Сумма не может превышать остаток: ' + max);
+        amountInput.reportValidity();
+        return;
+    }
+    amountInput.setCustomValidity('');
+});
+</script>
+{% endblock %}

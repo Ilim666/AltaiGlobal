@@ -71,6 +71,16 @@
                 <td>
                     {{ "%.2f"|format((s.total - (s.payment_amount or 0))|round(2)|float) }}
                 </td>
+                <td>{{ s.note or '—' }}</td>
+                {% if session.get("role") == 'admin' %}
+                <td>
+                    <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-sm btn-outline-secondary" title="Редактировать">✏️</a>
+                    <form method="post" action="{{ url_for('delete_sale', id=s.id) }}" class="d-inline"
+                          onsubmit="return confirm('Удалить продажу №{{ s.id }}?')">
+                        <button class="btn btn-sm btn-outline-danger" title="Удалить">🗑</button>
+                    </form>
+                </td>
+                {% endif %}
             </tr>
             {% endfor %}
             </tbody>

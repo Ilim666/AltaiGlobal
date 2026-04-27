@@ -1896,7 +1896,13 @@ def pay_debt(sale_id):
     )
     db.session.add(payment)
     db.session.commit()
-    return redirect(url_for("debts_journal"))
+
+    # ГЛАВНОЕ ДОБАВЛЕНИЕ:
+    client_id = request.form.get("client_id")
+    if client_id:
+        return redirect(url_for("debts_journal", client_id=client_id))
+    else:
+        return redirect(url_for("debts_journal"))
 
 
 @app.route("/payments")

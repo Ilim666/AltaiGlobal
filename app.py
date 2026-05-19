@@ -2,16 +2,24 @@ import re
 import os
 import secrets
 from io import BytesIO
-from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import date, datetime, time, timedelta
 from functools import wraps
-from datetime import datetime
 
 import pytz
-from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import (
+    Flask,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
 from flask_sqlalchemy import SQLAlchemy
-from flask import request
 from sqlalchemy import or_
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -22,18 +30,28 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
 app = Flask(__name__)
-uri = os.environ.get("DATABASE_URL", "")
+uri = os.environ.get("DATABASE_URL", "").strip()
 if uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
 if not uri:
-    raise RuntimeError("DATABASE_URL is not set! Обязательно добавь переменную в Railway.")
+    os.makedirs(os.path.join(app.root_path, "instance"), exist_ok=True)
+    uri = "sqlite:///" + os.path.join(app.root_path, "instance", "altai.db").replace("\\", "/")
+    app.logger.warning("DATABASE_URL is not set; using local SQLite at instance/altai.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or secrets.token_hex(32)
+_secret = os.getenv("SECRET_KEY")
+if not _secret:
+    _secret = secrets.token_hex(32)
+    app.logger.warning("SECRET_KEY is not set; sessions reset on every restart")
+app.config["SECRET_KEY"] = _secret
 db = SQLAlchemy(app)
 TZ = pytz.timezone(os.getenv("TZ", "Asia/Bishkek"))
 
-TZ = pytz.timezone("Asia/Bishkek")
+CLIENT_AUTH_MAX_ATTEMPTS = 5
+CLIENT_AUTH_WINDOW_SECONDS = 300
+_client_auth_attempts = {}
+
+CSRF_EXEMPT_ENDPOINTS = frozenset({"login", "client_auth", "static"})
 
 def fmt_dt_local(dt):
     if not dt:
@@ -52,6 +70,93 @@ def fmt_phone(phone):
 
 
 app.jinja_env.filters["fmt_phone"] = fmt_phone
+
+
+def ensure_csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return session["csrf_token"]
+
+
+def validate_csrf_token(token=None):
+    token = token or request.form.get("csrf_token") or request.headers.get("X-CSRF-Token", "")
+    expected = session.get("csrf_token", "")
+    return bool(token and expected and secrets.compare_digest(token, expected))
+
+
+def _is_client_auth_rate_limited():
+    ip = request.remote_addr or "unknown"
+    now = datetime.now(TZ).timestamp()
+    attempts, window_start = _client_auth_attempts.get(ip, (0, now))
+    if now - window_start > CLIENT_AUTH_WINDOW_SECONDS:
+        return False
+    return attempts >= CLIENT_AUTH_MAX_ATTEMPTS
+
+
+def _record_failed_client_auth():
+    ip = request.remote_addr or "unknown"
+    now = datetime.now(TZ).timestamp()
+    attempts, window_start = _client_auth_attempts.get(ip, (0, now))
+    if now - window_start > CLIENT_AUTH_WINDOW_SECONDS:
+        attempts, window_start = 0, now
+    _client_auth_attempts[ip] = (attempts + 1, window_start)
+
+
+def _reset_client_auth_rate_limit():
+    ip = request.remote_addr or "unknown"
+    _client_auth_attempts.pop(ip, None)
+
+
+def _release_client_unique_fields(client):
+    stamp = int(datetime.now(TZ).timestamp())
+    client.fio = f"{client.fio[:72]}__del{client.id}_{stamp}"[:100]
+    client.phone = f"9{client.id:09d}"[-10:]
+    client.inn = f"9{client.id:013d}"[-14:]
+    client.token = None
+
+
+def _release_car_unique_fields(car):
+    car.number = f"DEL{car.id:07d}"[:20]
+
+
+def _adjust_daily_stock(liters_delta, stock_date=None):
+    _ensure_daily_stock_tables()
+    stock_date = stock_date or datetime.now(TZ).date()
+    daily_stock = _get_or_create_daily_stock(stock_date)
+    daily_stock.current_stock = _to_decimal_2(
+        _to_decimal_2(daily_stock.current_stock or 0) + _to_decimal_2(liters_delta)
+    )
+
+
+def _parse_local_datetime(value):
+    if not value:
+        return None
+    naive = datetime.strptime(value, "%Y-%m-%dT%H:%M")
+    return TZ.localize(naive)
+
+
+@app.context_processor
+def inject_csrf():
+    if session.get("user_id") or session.get("role") == "client":
+        ensure_csrf_token()
+    return {"csrf_token": session.get("csrf_token", "")}
+
+
+@app.before_request
+def csrf_protect():
+    if request.method not in ("POST", "PUT", "DELETE", "PATCH"):
+        return
+    if request.endpoint in CSRF_EXEMPT_ENDPOINTS:
+        return
+    if not session.get("user_id") and session.get("role") != "client":
+        return
+    ensure_csrf_token()
+    if validate_csrf_token():
+        return
+    if request.path.startswith("/api/") or request.is_json:
+        return jsonify({"ok": False, "error": "Сессия истекла. Обновите страницу."}), 403
+    flash("Сессия истекла. Повторите действие.", "danger")
+    return redirect(request.referrer or url_for("index"))
 
 
 class User(db.Model):
@@ -263,70 +368,6 @@ def _month_datetime_bounds(start_date, end_date):
     return datetime.combine(start_date, time.min), datetime.combine(end_date + timedelta(days=1), time.min)
 
 
-def _remaining_goods_by_day(days):
-    if not days:
-        return {}
-
-    inspector = inspect(db.engine)
-    table_names = set(inspector.get_table_names())
-    table_name = "car" if "car" in table_names else "cars" if "cars" in table_names else None
-    if not table_name:
-        return {}
-
-    candidate_remaining_columns = [
-        "remaining_goods",
-        "stock_remaining",
-        "fuel_remaining",
-        "liters_remaining",
-        "remainder",
-    ]
-    columns = {column["name"] for column in inspector.get_columns(table_name)}
-    remaining_column = next((name for name in candidate_remaining_columns if name in columns), None)
-    if not remaining_column:
-        return {}
-
-    date_column = next((name for name in ["updated_at", "created_at"] if name in columns), None)
-
-    if not date_column:
-        total_remaining = db.session.execute(
-            text(f"SELECT COALESCE(SUM({remaining_column}), 0) FROM {table_name}")
-        ).scalar_one()
-        return {day: float(total_remaining or 0) for day in days}
-
-    min_day = min(days).isoformat()
-    max_day = max(days).isoformat()
-    rows = db.session.execute(
-        text(
-            f"""
-            SELECT DATE({date_column}) AS d, COALESCE(SUM({remaining_column}), 0) AS rem
-            FROM {table_name}
-            WHERE DATE({date_column}) BETWEEN :min_day AND :max_day
-            GROUP BY DATE({date_column})
-            """
-        ),
-        {"min_day": min_day, "max_day": max_day},
-    ).all()
-    return {datetime.strptime(row.d, "%Y-%m-%d").date(): float(row.rem or 0) for row in rows if row.d}
-
-
-def _ensure_car_stock_column():
-    inspector = inspect(db.engine)
-    table_names = set(inspector.get_table_names())
-    table_name = "car" if "car" in table_names else "cars" if "cars" in table_names else None
-    if not table_name:
-        return
-
-    columns = {column["name"] for column in inspector.get_columns(table_name)}
-    if "stock" in columns:
-        return
-
-    if table_name == "car":
-        db.session.execute(text("ALTER TABLE car ADD COLUMN stock FLOAT DEFAULT 0"))
-    else:
-        db.session.execute(text("ALTER TABLE cars ADD COLUMN stock FLOAT DEFAULT 0"))
-    db.session.commit()
-
-
 def _ensure_daily_stock_tables():
     inspector = inspect(db.engine)
     table_names = set(inspector.get_table_names())
@@ -532,32 +573,51 @@ def _get_or_create_daily_stock(stock_date):
     return daily_stock
 
 
-with app.app_context():
+def _bootstrap_database():
     db.create_all()
     _ensure_daily_stock_tables()
     _ensure_client_car_soft_delete()
     _ensure_sale_payment_user_columns()
     _ensure_liters_numeric_columns()
 
-    legacy_users = User.query.all()
-    for legacy_user in legacy_users:
+    for legacy_user in User.query.all():
         if not (legacy_user.password or "").startswith(("pbkdf2:", "scrypt:")):
             legacy_user.password = generate_password_hash(legacy_user.password or "")
 
-    admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD") or "admin123"
-    operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD") or "operator123"
-
     if not User.query.filter_by(username="admin").first():
-        admin = User(username="admin", password=generate_password_hash(admin_password), role="admin")
-        db.session.add(admin)
-        print("✅ Создан пользователь: admin")
+        admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD")
+        if admin_password:
+            db.session.add(
+                User(username="admin", password=generate_password_hash(admin_password), role="admin")
+            )
+            app.logger.info("Created default admin user")
+        else:
+            app.logger.warning(
+                "User 'admin' not found and DEFAULT_ADMIN_PASSWORD is not set; "
+                "create an admin manually or set DEFAULT_ADMIN_PASSWORD"
+            )
 
     if not User.query.filter_by(username="operator").first():
-        operator = User(username="operator", password=generate_password_hash(operator_password), role="operator")
-        db.session.add(operator)
-        print("✅ Создан пользователь: operator")
+        operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD")
+        if operator_password:
+            db.session.add(
+                User(
+                    username="operator",
+                    password=generate_password_hash(operator_password),
+                    role="operator",
+                )
+            )
+            app.logger.info("Created default operator user")
+        else:
+            app.logger.warning(
+                "User 'operator' not found and DEFAULT_OPERATOR_PASSWORD is not set"
+            )
 
     db.session.commit()
+
+
+with app.app_context():
+    _bootstrap_database()
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -566,8 +626,8 @@ def login():
         return redirect(url_for("index"))
 
     if request.method == "POST":
-        csrf_token = request.form.get("csrf_token", "")
-        if not csrf_token or not secrets.compare_digest(csrf_token, session.get("csrf_token", "")):
+        ensure_csrf_token()
+        if not validate_csrf_token():
             return render_template("login.html", error="Сессия истекла. Повторите вход.")
 
         username = request.form.get("username", "").strip()
@@ -575,16 +635,17 @@ def login():
 
         user = User.query.filter_by(username=username).first()
         if user and verify_user_password(user, password):
+            session.clear()
             session["user_id"] = user.id
             session["username"] = user.username
             session["role"] = user.role
-            session.pop("csrf_token", None)
+            ensure_csrf_token()
             return redirect(url_for("index"))
 
         error = "Неверное имя пользователя или пароль"
         return render_template("login.html", error=error)
 
-    session["csrf_token"] = secrets.token_urlsafe(32)
+    ensure_csrf_token()
     return render_template("login.html")
 
 
@@ -621,7 +682,10 @@ def clients():
 @admin_required
 def delete_sale(id):
     sale = Sale.query.filter_by(id=id).first_or_404()
+    sale_date = sale.created_at.astimezone(TZ).date() if sale.created_at else datetime.now(TZ).date()
+    liters = sale.liters or 0
     db.session.delete(sale)
+    _adjust_daily_stock(liters, sale_date)
     db.session.commit()
     return redirect(url_for("sales_journal"))
 
@@ -710,20 +774,32 @@ def client_dashboard():
     if session.get("role") != "client":
         return redirect(url_for("client_auth"))
     client_id = session.get("client_id")
-    sales = Sale.query.join(Car).filter(Car.client_id == client_id).all()
-    payments = Payment.query.join(Sale).join(Car).filter(Car.client_id == client_id).all()
+    cars = Car.query.filter_by(client_id=client_id, is_deleted=False).order_by(Car.number.asc()).all()
+    sales = (
+        Sale.query.join(Car)
+        .filter(Car.client_id == client_id, Car.is_deleted.is_(False))
+        .order_by(Sale.created_at.desc())
+        .all()
+    )
+    payments = (
+        Payment.query.filter_by(client_id=client_id)
+        .options(joinedload(Payment.sale))
+        .order_by(Payment.created_at.desc())
+        .all()
+    )
+
     def calc_debt(sale):
-        total = getattr(sale, 'total', None)
-        if total is None:
-            total = (sale.price_per_liter or 0) * (sale.liters or 0)
-        paid = getattr(sale, 'payment_amount', 0) or 0
-        return max(0, total - paid)
-    total_debt = sum(calc_debt(sale) for sale in sales)
+        total = sale.total if sale.total is not None else (sale.price_per_liter or 0) * (sale.liters or 0)
+        paid = sale.payment_amount or 0
+        return max(Decimal("0"), _to_decimal_2(total) - _to_decimal_2(paid))
+
+    total_debt = sum((calc_debt(sale) for sale in sales), Decimal("0"))
     return render_template(
         "client_dashboard.html",
         sales=sales,
         payments=payments,
-        total_debt=total_debt
+        cars=cars,
+        total_debt=float(total_debt),
     )
 
 
@@ -852,8 +928,11 @@ def edit_client(id):
 @app.route("/generate-token", methods=["GET", "POST"])
 @admin_required
 def generate_token():
-    client_id = request.args.get("client_id")
-    client = Client.query.get_or_404(client_id)
+    client_id = request.args.get("client_id", type=int)
+    if not client_id:
+        flash("Не указан клиент.", "danger")
+        return redirect(url_for("clients"))
+    client = Client.query.filter_by(id=client_id, is_deleted=False).first_or_404()
     token = None
     if request.method == "POST":
         client.generate_token()
@@ -865,15 +944,22 @@ def generate_token():
 @app.route("/client-auth", methods=["GET", "POST"])
 def client_auth():
     if request.method == "POST":
+        if _is_client_auth_rate_limited():
+            return render_template(
+                "client_auth.html",
+                error="Слишком много попыток. Подождите несколько минут.",
+            )
         token = request.form.get("token", "").upper().strip()
-        client = Client.query.filter_by(token=token).first()
+        client = Client.query.filter_by(token=token, is_deleted=False).first()
         if client:
+            _reset_client_auth_rate_limit()
             session.clear()
             session["client_id"] = client.id
             session["role"] = "client"
+            ensure_csrf_token()
             return redirect(url_for("client_dashboard"))
-        else:
-            return render_template("client_auth.html", error="Токен не верный")
+        _record_failed_client_auth()
+        return render_template("client_auth.html", error="Токен не верный")
     return render_template("client_auth.html")
 
 
@@ -884,9 +970,11 @@ def delete_client(id):
     deleted_at = datetime.now(TZ)
     client.is_deleted = True
     client.deleted_at = deleted_at
+    _release_client_unique_fields(client)
     for car in Car.query.filter_by(client_id=client.id, is_deleted=False).all():
         car.is_deleted = True
         car.deleted_at = deleted_at
+        _release_car_unique_fields(car)
     db.session.commit()
     return redirect(url_for("clients"))
 
@@ -1013,6 +1101,7 @@ def delete_car(id):
     next_page = request.form.get("next", "")
     car.is_deleted = True
     car.deleted_at = datetime.now(TZ)
+    _release_car_unique_fields(car)
     db.session.commit()
     if next_page == "cars":
         return redirect(url_for("cars"))
@@ -1205,6 +1294,7 @@ def receipts():
                     notes=form["notes"] or None,
                 )
             )
+            _adjust_daily_stock(liters)
             db.session.commit()
             return redirect(url_for("receipts"))
 
@@ -1237,7 +1327,10 @@ def receipts():
 @admin_required
 def delete_receipt(receipt_id):
     receipt = Receipt.query.get_or_404(receipt_id)
+    receipt_date = receipt.created_at.astimezone(TZ).date() if receipt.created_at else datetime.now(TZ).date()
+    liters = receipt.liters or 0
     db.session.delete(receipt)
+    _adjust_daily_stock(-Decimal(str(liters)), receipt_date)
     db.session.commit()
     return redirect(url_for("receipts"))
 
@@ -1308,6 +1401,13 @@ def sales():
                     payment_amount = _to_decimal_2(payment_amount)
                 except (ValueError, TypeError, InvalidOperation):
                     errors["payment_amount"] = "Введите корректную сумму оплаты."
+
+        if not errors and form["payment_method"] != "долг" and payment_amount is not None:
+            expected_total = _to_decimal_2(Decimal(str(liters)) * price)
+            if payment_amount != expected_total:
+                errors["payment_amount"] = (
+                    f"Сумма оплаты должна совпадать с итогом ({expected_total})."
+                )
 
         if not errors:
             total = _to_decimal_2(Decimal(str(liters)) * price)
@@ -1721,7 +1821,12 @@ def sales_journal():
         .options(joinedload(Sale.car).joinedload(Car.client), joinedload(Sale.created_by_user))
         .join(Sale.car)
         .join(Car.client)
-        .filter(Sale.created_at >= start_dt, Sale.created_at < end_dt)
+        .filter(
+            Sale.created_at >= start_dt,
+            Sale.created_at < end_dt,
+            Car.is_deleted.is_(False),
+            Client.is_deleted.is_(False),
+        )
     )
     if q:
         query = query.filter(
@@ -1741,16 +1846,38 @@ def edit_sale(sale_id):
     errors = {}
     if request.method == "POST":
         try:
-            sale.liters = float(request.form["liters"])
-            sale.price_per_liter = float(request.form["price_per_liter"])
-            sale.payment_amount = float(request.form.get("payment_amount", 0))
-            sale.payment_method = request.form["payment_method"]
-            sale.note = request.form.get("note", "")
+            old_liters = _to_decimal_2(sale.liters)
+            old_date = sale.created_at.astimezone(TZ).date() if sale.created_at else datetime.now(TZ).date()
+
+            liters = _to_decimal_2(request.form["liters"])
+            price = _to_decimal_2(request.form["price_per_liter"])
+            payment_amount = _to_decimal_2(request.form.get("payment_amount", 0))
+            payment_method = request.form["payment_method"]
+            if payment_method not in PAYMENT_METHODS:
+                raise ValueError("Неверный способ оплаты")
+
+            total = _to_decimal_2(liters * price)
+            if payment_method != "долг" and payment_amount != total:
+                raise ValueError("Сумма оплаты должна совпадать с итогом продажи")
+
+            sale.liters = liters
+            sale.price_per_liter = price
+            sale.total = total
+            sale.payment_amount = payment_amount
+            sale.payment_method = payment_method
+            sale.note = request.form.get("note", "") or None
             created_at_str = request.form.get("created_at")
-            sale.created_at = datetime.strptime(created_at_str, "%Y-%m-%dT%H:%M")
+            parsed_created_at = _parse_local_datetime(created_at_str)
+            if parsed_created_at:
+                sale.created_at = parsed_created_at
+
+            new_date = sale.created_at.astimezone(TZ).date() if sale.created_at else datetime.now(TZ).date()
+            _adjust_daily_stock(old_liters, old_date)
+            _adjust_daily_stock(-liters, new_date)
+
             db.session.commit()
             return redirect(url_for("sales_journal"))
-        except Exception as e:
+        except (ValueError, TypeError, InvalidOperation) as e:
             errors["main"] = "Ошибка сохранения: " + str(e)
     return render_template("edit_sale.html", sale=sale, errors=errors)
 
@@ -1765,8 +1892,9 @@ def edit_payment(payment_id):
             payment.amount = float(request.form["amount"])
             payment.payment_method = request.form["payment_method"]
             created_at_str = request.form.get("created_at")
-            if created_at_str:
-                payment.created_at = datetime.strptime(created_at_str, "%Y-%m-%dT%H:%M")
+            parsed_created_at = _parse_local_datetime(created_at_str)
+            if parsed_created_at:
+                payment.created_at = parsed_created_at
             db.session.commit()
             return redirect(url_for("payments"))
         except Exception as e:
@@ -1784,7 +1912,11 @@ def debts_journal():
         .options(joinedload(Sale.car).joinedload(Car.client))
         .join(Sale.car)
         .join(Car.client)
-        .filter((Sale.total - db.func.coalesce(Sale.payment_amount, 0.0)) > 0)
+        .filter(
+            (Sale.total - db.func.coalesce(Sale.payment_amount, 0.0)) > 0,
+            Car.is_deleted.is_(False),
+            Client.is_deleted.is_(False),
+        )
     )
     if q:
         query = query.filter(
@@ -1814,7 +1946,11 @@ def debts_by_client():
         .options(joinedload(Sale.car).joinedload(Car.client))
         .join(Sale.car)
         .join(Car.client)
-        .filter((Sale.total - db.func.coalesce(Sale.payment_amount, 0.0)) > 0)
+        .filter(
+            (Sale.total - db.func.coalesce(Sale.payment_amount, 0.0)) > 0,
+            Car.is_deleted.is_(False),
+            Client.is_deleted.is_(False),
+        )
         .all()
     )
     
@@ -1883,8 +2019,6 @@ def pay_debt(sale_id):
         amount = remaining
 
     sale.payment_amount = _to_decimal_2(Decimal(str(sale.payment_amount or 0)) + amount)
-    if sale.payment_amount >= _to_decimal_2(sale.total):
-        sale.payment_method = payment_method
 
     payment = Payment(
         client_id=sale.car.client_id,
@@ -2002,31 +2136,4 @@ def turnover():
 
 
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-        _ensure_daily_stock_tables()
-        _ensure_client_car_soft_delete()
-        _ensure_sale_payment_user_columns()
-        _ensure_liters_numeric_columns()
-
-        legacy_users = User.query.all()
-        for legacy_user in legacy_users:
-            if not (legacy_user.password or "").startswith(("pbkdf2:", "scrypt:")):
-                legacy_user.password = generate_password_hash(legacy_user.password or "")
-
-        admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD") or "admin123"
-        operator_password = os.getenv("DEFAULT_OPERATOR_PASSWORD") or "operator123"
-
-        if not User.query.filter_by(username="admin").first():
-            admin = User(username="admin", password=generate_password_hash(admin_password), role="admin")
-            db.session.add(admin)
-            print("✅ Создан пользователь: admin")
-
-        if not User.query.filter_by(username="operator").first():
-            operator = User(username="operator", password=generate_password_hash(operator_password), role="operator")
-            db.session.add(operator)
-            print("✅ Создан пользователь: operator")
-
-        db.session.commit()
-
     app.run(debug=os.getenv("FLASK_DEBUG", "False") == "True")

@@ -190,9 +190,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
         applyBtn.disabled = true;
         try {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.getAttribute("content") : "";
             const response = await fetch("/api/set-daily-stock", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRF-Token": csrfToken
+                },
                 body: JSON.stringify({ liters: liters })
             });
             const data = await response.json().catch(() => ({}));

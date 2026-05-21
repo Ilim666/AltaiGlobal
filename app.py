@@ -66,6 +66,15 @@ def fmt_dt_local(dt):
 app.jinja_env.filters['dt_kz'] = fmt_dt_local
 
 
+def fmt_dt_local_input(dt):
+    if not dt:
+        return ""
+    return dt.astimezone(TZ).strftime("%Y-%m-%dT%H:%M")
+
+
+app.jinja_env.filters["dt_local_input"] = fmt_dt_local_input
+
+
 def fmt_phone(phone):
     """Format a 10-digit phone string as XXXX-XXX-XXX."""
     digits = re.sub(r"\D", "", str(phone or ""))
@@ -192,6 +201,22 @@ def session_idle_timeout():
         )
         return redirect(url_for("client_auth") if was_client else url_for("login"))
     _update_session_activity()
+
+
+@app.before_request
+def ensure_active_client_session():
+    if request.endpoint in SESSION_IDLE_EXEMPT_ENDPOINTS:
+        return
+    if session.get("role") != "client":
+        return
+    client_id = session.get("client_id")
+    if not client_id:
+        return
+    client = Client.query.get(client_id)
+    if not client or client.is_deleted:
+        session.clear()
+        flash("Доступ в кабинет закрыт.", "warning")
+        return redirect(url_for("client_auth"))
 
 
 @app.before_request
@@ -895,6 +920,44 @@ def _sale_remaining_debt(sale):
     total = sale.total if sale.total is not None else (sale.price_per_liter or 0) * (sale.liters or 0)
     paid = sale.payment_amount or 0
     return max(Decimal("0"), _to_decimal_2(total) - _to_decimal_2(paid))
+
+
+def _recalculate_sale_payment_amount(sale):
+    total_paid = sum(
+        (_to_decimal_2(payment.amount) for payment in sale.payments),
+        Decimal("0"),
+    )
+    sale.payment_amount = total_paid if total_paid > 0 else None
+    return sale.payment_amount
+
+
+def _sync_sale_payments_after_edit(sale):
+    debt_paid = sum(
+        (
+            _to_decimal_2(payment.amount)
+            for payment in sale.payments
+            if payment.payment_type == "долг"
+        ),
+        Decimal("0"),
+    )
+    for payment in list(sale.payments):
+        if payment.payment_type == "продажа":
+            db.session.delete(payment)
+
+    total_paid = _to_decimal_2(sale.payment_amount or 0)
+    sale_part = max(Decimal("0"), total_paid - debt_paid)
+    if sale.payment_method != "долг" and sale_part > 0:
+        db.session.add(
+            Payment(
+                client_id=sale.car.client_id,
+                sale_id=sale.id,
+                amount=sale_part,
+                payment_type="продажа",
+                payment_method=sale.payment_method,
+                paid_by=session.get("user_id"),
+            )
+        )
+    _recalculate_sale_payment_amount(sale)
 
 
 @app.route("/client-dashboard")
@@ -1678,14 +1741,18 @@ def _build_payments_report_payload(start_date, end_date):
             joinedload(Payment.paid_by_user),
         )
         .join(Payment.client)
-        .filter(Payment.created_at >= start_dt, Payment.created_at < end_dt)
+        .filter(
+            Payment.created_at >= start_dt,
+            Payment.created_at < end_dt,
+            Client.is_deleted.is_(False),
+        )
         .order_by(Payment.created_at.desc())
         .all()
     )
     rows = []
     for payment in payments_data:
         sale = payment.sale
-        remaining = _format_number((sale.total - (sale.payment_amount or 0)) if sale else 0)
+        remaining = _format_number(_sale_remaining_debt(sale)) if sale else "0"
         payment_method = payment.payment_method or (sale.payment_method if sale else None)
         rows.append(
             {
@@ -1730,7 +1797,10 @@ def _build_cash_rows(start_date, end_date):
     )
     daily = {}
     for payment in all_payments:
-        date_key = payment.created_at.date()
+        created_at = payment.created_at
+        if created_at.tzinfo is None:
+            created_at = TZ.localize(created_at)
+        date_key = created_at.astimezone(TZ).date()
         if date_key not in daily:
             daily[date_key] = {
                 "date": date_key.strftime("%d.%m.%Y"),
@@ -1788,14 +1858,12 @@ def _build_cash_report_payload(start_date, end_date):
 def _build_turnover_rows(start_date, end_date):
     _ensure_daily_stock_tables()
     sale_day = func.date(Sale.created_at)
-    payment_method = func.lower(func.coalesce(Sale.payment_method, ""))
     min_dt, max_dt = _month_datetime_bounds(start_date, end_date)
 
     sales_query = db.session.query(
         sale_day.label("sale_date"),
         func.coalesce(func.sum(Sale.liters), 0).label("liters"),
         func.coalesce(func.sum(Sale.total), 0).label("amount"),
-        func.coalesce(func.sum(case((payment_method == DEBT_PAYMENT_TYPE, 0), else_=func.coalesce(Sale.payment_amount, 0))), 0).label("payments"),
         func.coalesce(func.sum(Sale.total - func.coalesce(Sale.payment_amount, 0)), 0).label("debts"),
     ).filter(Sale.created_at >= min_dt, Sale.created_at < max_dt)
 
@@ -1804,6 +1872,17 @@ def _build_turnover_rows(start_date, end_date):
     error_message = None
 
     try:
+        payments_by_day = {}
+        for payment in Payment.query.filter(
+            Payment.created_at >= min_dt,
+            Payment.created_at < max_dt,
+        ).all():
+            created_at = payment.created_at
+            if created_at.tzinfo is None:
+                created_at = TZ.localize(created_at)
+            pay_date = created_at.astimezone(TZ).date()
+            payments_by_day[pay_date] = payments_by_day.get(pay_date, 0.0) + float(payment.amount or 0)
+
         grouped_sales = sales_query.group_by(sale_day).order_by(sale_day.desc()).all()
         sales_by_day = {}
         for row in grouped_sales:
@@ -1812,12 +1891,11 @@ def _build_turnover_rows(start_date, end_date):
                 continue
             liters = float(row.liters or 0)
             amount = float(row.amount or 0)
-            payments = float(row.payments or 0)
             debts = float(row.debts or 0)
+            payments = payments_by_day.get(row_date, 0.0)
             average_price = amount / liters if liters else 0.0
             totals["liters"] += liters
             totals["amount"] += amount
-            totals["payments"] += payments
             totals["debts"] += debts
             sales_by_day[row_date] = {
                 "liters": liters,
@@ -1826,6 +1904,7 @@ def _build_turnover_rows(start_date, end_date):
                 "debts": debts,
                 "average_price": average_price,
             }
+        totals["payments"] = sum(payments_by_day.values())
 
         additions_by_day = {
             _coerce_day(row.stock_date): float(row.added_liters or 0)
@@ -1844,7 +1923,7 @@ def _build_turnover_rows(start_date, end_date):
             if _coerce_day(row.stock_date)
         }
 
-        all_days = set(sales_by_day) | set(additions_by_day) | set(stock_by_day)
+        all_days = set(sales_by_day) | set(additions_by_day) | set(stock_by_day) | set(payments_by_day)
         for row_date in sorted(all_days, reverse=True):
             daily_sales = sales_by_day.get(
                 row_date,
@@ -2006,7 +2085,7 @@ def sales_journal():
     )
     if q:
         query = query.filter(
-            db.or_(
+            or_(
                 Client.fio.ilike(f"%{q}%"),
                 Car.number.ilike(f"%{q}%"),
             )
@@ -2055,6 +2134,7 @@ def edit_sale(sale_id):
             new_date = sale.created_at.astimezone(TZ).date() if sale.created_at else datetime.now(TZ).date()
             _adjust_daily_stock(old_liters, old_date)
             _adjust_daily_stock(-liters, new_date)
+            _sync_sale_payments_after_edit(sale)
 
             db.session.commit()
             return redirect(url_for("sales_journal"))
@@ -2076,6 +2156,8 @@ def edit_payment(payment_id):
             parsed_created_at = _parse_local_datetime(created_at_str)
             if parsed_created_at:
                 payment.created_at = parsed_created_at
+            if payment.sale:
+                _recalculate_sale_payment_amount(payment.sale)
             db.session.commit()
             return redirect(url_for("payments"))
         except Exception as e:
@@ -2101,7 +2183,7 @@ def debts_journal():
     )
     if q:
         query = query.filter(
-            db.or_(
+            or_(
                 Client.fio.ilike(f"%{q}%"),
                 Car.number.ilike(f"%{q}%"),
             )
@@ -2142,17 +2224,12 @@ def debts_by_client():
             clients_map[client.id] = {
                 "client": client,
                 "count": 0,
-                "total_debt": Decimal("0.00"),
-                "total_paid": Decimal("0.00"),
+                "remaining": Decimal("0.00"),
             }
         clients_map[client.id]["count"] += 1
-        clients_map[client.id]["total_debt"] += _to_decimal_2(sale.total)
-        clients_map[client.id]["total_paid"] += _to_decimal_2(sale.payment_amount)
+        clients_map[client.id]["remaining"] += _sale_remaining_debt(sale)
 
-    rows = []
-    for data in clients_map.values():
-        data["remaining"] = data["total_debt"] - data["total_paid"]
-        rows.append(data)
+    rows = list(clients_map.values())
 
     if q:
         rows = [r for r in rows if q.lower() in r["client"].fio.lower()]
@@ -2161,8 +2238,6 @@ def debts_by_client():
 
     totals = {
         "count": sum(r["count"] for r in rows),
-        "total_debt": sum(r["total_debt"] for r in rows),
-        "total_paid": sum(r["total_paid"] for r in rows),
         "remaining": sum(r["remaining"] for r in rows),
     }
 
@@ -2195,11 +2270,16 @@ def pay_debt(sale_id):
     if payment_method not in ["наличка", "безнал", "доллар"]:
         return redirect(url_for("debts_journal"))
 
-    remaining = _to_decimal_2(sale.total) - _to_decimal_2(sale.payment_amount)
+    remaining = _sale_remaining_debt(sale)
+    if remaining <= 0:
+        flash("Долг по этой продаже уже погашен.", "info")
+        client_id = request.form.get("client_id")
+        if client_id:
+            return redirect(url_for("debts_journal", client_id=client_id))
+        return redirect(url_for("debts_journal"))
+
     if amount > remaining:
         amount = remaining
-
-    sale.payment_amount = _to_decimal_2(Decimal(str(sale.payment_amount or 0)) + amount)
 
     payment = Payment(
         client_id=sale.car.client_id,

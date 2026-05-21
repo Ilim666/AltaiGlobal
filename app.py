@@ -1875,7 +1875,7 @@ def _build_turnover_rows(start_date, end_date):
             0,
         ).label("payments"),
         func.coalesce(func.sum(Sale.total - func.coalesce(Sale.payment_amount, 0)), 0).label("debts"),
-    ).filter(Sale.created_at >= min_dt, Sale.created_at < end_dt)
+    ).filter(Sale.created_at >= min_dt, Sale.created_at < max_dt)
 
     rows_data = []
     totals = {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0, "average_price": 0.0}

@@ -1858,31 +1858,30 @@ def _build_cash_report_payload(start_date, end_date):
 def _build_turnover_rows(start_date, end_date):
     _ensure_daily_stock_tables()
     sale_day = func.date(Sale.created_at)
+    payment_method = func.lower(func.coalesce(Sale.payment_method, ""))
     min_dt, max_dt = _month_datetime_bounds(start_date, end_date)
 
     sales_query = db.session.query(
         sale_day.label("sale_date"),
         func.coalesce(func.sum(Sale.liters), 0).label("liters"),
         func.coalesce(func.sum(Sale.total), 0).label("amount"),
+        func.coalesce(
+            func.sum(
+                case(
+                    (payment_method == DEBT_PAYMENT_TYPE, 0),
+                    else_=func.coalesce(Sale.payment_amount, 0),
+                )
+            ),
+            0,
+        ).label("payments"),
         func.coalesce(func.sum(Sale.total - func.coalesce(Sale.payment_amount, 0)), 0).label("debts"),
-    ).filter(Sale.created_at >= min_dt, Sale.created_at < max_dt)
+    ).filter(Sale.created_at >= min_dt, Sale.created_at < end_dt)
 
     rows_data = []
     totals = {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0, "average_price": 0.0}
     error_message = None
 
     try:
-        payments_by_day = {}
-        for payment in Payment.query.filter(
-            Payment.created_at >= min_dt,
-            Payment.created_at < max_dt,
-        ).all():
-            created_at = payment.created_at
-            if created_at.tzinfo is None:
-                created_at = TZ.localize(created_at)
-            pay_date = created_at.astimezone(TZ).date()
-            payments_by_day[pay_date] = payments_by_day.get(pay_date, 0.0) + float(payment.amount or 0)
-
         grouped_sales = sales_query.group_by(sale_day).order_by(sale_day.desc()).all()
         sales_by_day = {}
         for row in grouped_sales:
@@ -1891,11 +1890,12 @@ def _build_turnover_rows(start_date, end_date):
                 continue
             liters = float(row.liters or 0)
             amount = float(row.amount or 0)
+            payments = float(row.payments or 0)
             debts = float(row.debts or 0)
-            payments = payments_by_day.get(row_date, 0.0)
             average_price = amount / liters if liters else 0.0
             totals["liters"] += liters
             totals["amount"] += amount
+            totals["payments"] += payments
             totals["debts"] += debts
             sales_by_day[row_date] = {
                 "liters": liters,
@@ -1904,7 +1904,6 @@ def _build_turnover_rows(start_date, end_date):
                 "debts": debts,
                 "average_price": average_price,
             }
-        totals["payments"] = sum(payments_by_day.values())
 
         additions_by_day = {
             _coerce_day(row.stock_date): float(row.added_liters or 0)
@@ -1923,7 +1922,7 @@ def _build_turnover_rows(start_date, end_date):
             if _coerce_day(row.stock_date)
         }
 
-        all_days = set(sales_by_day) | set(additions_by_day) | set(stock_by_day) | set(payments_by_day)
+        all_days = set(sales_by_day) | set(additions_by_day) | set(stock_by_day)
         for row_date in sorted(all_days, reverse=True):
             daily_sales = sales_by_day.get(
                 row_date,

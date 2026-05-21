@@ -45,9 +45,11 @@
                 <td>{{ c.created_at|dt_kz }}</td>
                 <td onclick="event.stopPropagation()">
                     <a href="/client/{{ c.id }}" class="btn btn-sm btn-outline-info" title="Детали">👁</a>
+                    {% if session.get('role') in ['admin', 'operator'] %}
+                    <a href="/generate-token?client_id={{ c.id }}" class="btn btn-sm btn-outline-primary" title="Ссылка в кабинет">🔗</a>
+                    {% endif %}
                     {% if session.get('role') == 'admin' %}
                     <a href="/edit-client/{{ c.id }}" class="btn btn-sm btn-outline-warning" title="Редактировать">✏️</a>
-                    <a href="/generate-token?client_id={{ c.id }}" class="btn btn-sm btn-outline-primary" title="Создать токен">🔑</a>
                     <form method="post" action="/delete-client/{{ c.id }}" class="d-inline"
                           onsubmit="return confirm('Удалить клиента и все его машины?')">
                         <button class="btn btn-sm btn-outline-danger" title="Удалить">🗑</button>

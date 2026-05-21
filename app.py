@@ -51,7 +51,7 @@ CLIENT_AUTH_MAX_ATTEMPTS = 5
 CLIENT_AUTH_WINDOW_SECONDS = 300
 _client_auth_attempts = {}
 
-CSRF_EXEMPT_ENDPOINTS = frozenset({"login", "client_auth", "static"})
+CSRF_EXEMPT_ENDPOINTS = frozenset({"login", "client_auth", "client_portal_login", "static"})
 
 def fmt_dt_local(dt):
     if not dt:
@@ -189,11 +189,10 @@ class Client(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
     cars = db.relationship("Car", backref="client", lazy=True)
-    token = db.Column(db.String(6), unique=True)
-    
+    token = db.Column(db.String(64), unique=True)
+
     def generate_token(self):
-        import random, string
-        self.token = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        self.token = secrets.token_urlsafe(32)
 
 
 class Car(db.Model):
@@ -298,6 +297,15 @@ def admin_required(f):
     return decorated_function
 
 
+def staff_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_id" not in session or session.get("role") not in ("admin", "operator"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 def verify_user_password(user, password):
     if not user.password:
         return False
@@ -388,6 +396,38 @@ def _ensure_daily_stock_tables():
         DailyStock.__table__.create(bind=db.engine, checkfirst=True)
     if "stock_history" not in table_names:
         StockHistory.__table__.create(bind=db.engine, checkfirst=True)
+
+
+def _ensure_client_token_column():
+    inspector = inspect(db.engine)
+    if "client" not in set(inspector.get_table_names()):
+        return
+    columns = {column["name"] for column in inspector.get_columns("client")}
+    if "token" not in columns:
+        db.session.execute(text("ALTER TABLE client ADD COLUMN token VARCHAR(64)"))
+        db.session.commit()
+        return
+    token_column = next(
+        (column for column in inspector.get_columns("client") if column["name"] == "token"),
+        None,
+    )
+    if not token_column:
+        return
+    column_type = str(token_column["type"]).lower()
+    if "64" in column_type or "text" in column_type:
+        return
+    if db.engine.dialect.name == "postgresql":
+        db.session.execute(text("ALTER TABLE client ALTER COLUMN token TYPE VARCHAR(64)"))
+    else:
+        db.session.execute(text("ALTER TABLE client ADD COLUMN token__tmp VARCHAR(64)"))
+        db.session.execute(text("UPDATE client SET token__tmp = token"))
+        db.session.execute(text("ALTER TABLE client DROP COLUMN token"))
+        db.session.execute(text("ALTER TABLE client RENAME COLUMN token__tmp TO token"))
+    db.session.commit()
+
+
+def _client_portal_url(token):
+    return url_for("client_portal_login", token=token, _external=True)
 
 
 def _ensure_client_car_soft_delete():
@@ -589,6 +629,7 @@ def _get_or_create_daily_stock(stock_date):
 def _bootstrap_database():
     db.create_all()
     _ensure_daily_stock_tables()
+    _ensure_client_token_column()
     _ensure_client_car_soft_delete()
     _ensure_sale_payment_user_columns()
     _ensure_liters_numeric_columns()
@@ -943,20 +984,52 @@ def edit_client(id):
     return render_template("edit_client.html", client=client, errors=errors, form=form)
 
 
+def _login_client_by_token(token):
+    token = (token or "").strip()
+    if not token:
+        return None
+    return Client.query.filter_by(token=token, is_deleted=False).first()
+
+
+def _start_client_session(client):
+    session.clear()
+    session["client_id"] = client.id
+    session["role"] = "client"
+    ensure_csrf_token()
+
+
+@app.route("/client-cabinet/<token>")
+def client_portal_login(token):
+    client = _login_client_by_token(token)
+    if not client:
+        return render_template(
+            "client_auth.html",
+            error="Ссылка недействительна или устарела. Запросите новую у менеджера.",
+        ), 404
+    _start_client_session(client)
+    return redirect(url_for("client_dashboard"))
+
+
 @app.route("/generate-token", methods=["GET", "POST"])
-@admin_required
+@login_required
+@staff_required
 def generate_token():
     client_id = request.args.get("client_id", type=int)
     if not client_id:
         flash("Не указан клиент.", "danger")
         return redirect(url_for("clients"))
     client = Client.query.filter_by(id=client_id, is_deleted=False).first_or_404()
-    token = None
+    portal_url = _client_portal_url(client.token) if client.token else None
     if request.method == "POST":
         client.generate_token()
         db.session.commit()
-        token = client.token
-    return render_template("generate_token.html", client=client, token=token)
+        portal_url = _client_portal_url(client.token)
+        flash("Ссылка для клиента создана.", "success")
+    return render_template(
+        "generate_token.html",
+        client=client,
+        portal_url=portal_url,
+    )
 
 
 @app.route("/client-auth", methods=["GET", "POST"])
@@ -967,17 +1040,14 @@ def client_auth():
                 "client_auth.html",
                 error="Слишком много попыток. Подождите несколько минут.",
             )
-        token = request.form.get("token", "").upper().strip()
-        client = Client.query.filter_by(token=token, is_deleted=False).first()
+        token = request.form.get("token", "").strip()
+        client = _login_client_by_token(token)
         if client:
             _reset_client_auth_rate_limit()
-            session.clear()
-            session["client_id"] = client.id
-            session["role"] = "client"
-            ensure_csrf_token()
+            _start_client_session(client)
             return redirect(url_for("client_dashboard"))
         _record_failed_client_auth()
-        return render_template("client_auth.html", error="Токен не верный")
+        return render_template("client_auth.html", error="Ссылка или код доступа неверны")
     return render_template("client_auth.html")
 
 

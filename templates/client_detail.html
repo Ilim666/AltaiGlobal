@@ -10,9 +10,14 @@
 <div class="card shadow-sm mb-4">
     <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
         <span>Данные клиента</span>
-        {% if session.get('role') == 'admin' %}
-        <a href="/edit-client/{{ client.id }}" class="btn btn-sm btn-light">✏️ Редактировать</a>
-        {% endif %}
+        <div class="d-flex gap-2">
+            {% if session.get('role') in ['admin', 'operator'] %}
+            <a href="/generate-token?client_id={{ client.id }}" class="btn btn-sm btn-light">🔗 Ссылка в кабинет</a>
+            {% endif %}
+            {% if session.get('role') == 'admin' %}
+            <a href="/edit-client/{{ client.id }}" class="btn btn-sm btn-light">✏️ Редактировать</a>
+            {% endif %}
+        </div>
     </div>
     <div class="card-body">
         <div class="row">

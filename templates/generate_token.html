@@ -1,15 +1,57 @@
 {% extends "base.html" %}
+{% block title %}Ссылка в кабинет — AltaiGlobal{% endblock %}
 {% block content %}
-<div class="container mt-5">
-    <h2>Генерация токена для клиента</h2>
-    <p><b>Клиент:</b> {{ client.fio }}</p>
-    {% if token %}
-        <div class="alert alert-success fw-bold">Токен: {{ token }}</div>
-        <div>Отправьте клиенту ссылку: <code>{{ request.url_root }}client-auth</code> (там он введёт этот токен)</div>
+<div class="container py-4" style="max-width: 720px;">
+    <h2 class="mb-3">Ссылка в клиентский кабинет</h2>
+    <p class="mb-4"><b>Клиент:</b> {{ client.fio }}</p>
+
+    {% if portal_url %}
+    <div class="card shadow-sm border-success mb-4">
+        <div class="card-header bg-success text-white">
+            <strong>Ссылка для клиента</strong>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-2">
+                Отправьте клиенту эту ссылку (WhatsApp, SMS и т.д.). По ней он сразу попадёт в свой кабинет.
+            </p>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" id="portalLink" value="{{ portal_url }}" readonly>
+                <button type="button" class="btn btn-outline-primary" id="copyLinkBtn">Копировать</button>
+            </div>
+            <p class="small text-muted mb-0">
+                При создании новой ссылки старая перестанет работать.
+            </p>
+        </div>
+    </div>
+    <form method="post" class="mb-3">
+        <button type="submit" class="btn btn-warning">Создать новую ссылку</button>
+    </form>
     {% else %}
-        <form method="post">
-            <button type="submit" class="btn btn-primary">Сгенерировать токен</button>
-        </form>
+    <div class="alert alert-info mb-4">
+        У клиента ещё нет ссылки. Нажмите кнопку ниже, чтобы сгенерировать.
+    </div>
+    <form method="post" class="mb-3">
+        <button type="submit" class="btn btn-primary btn-lg">Создать ссылку</button>
+    </form>
     {% endif %}
+
+    <a href="{{ url_for('client_detail', id=client.id) }}" class="btn btn-outline-secondary">← К карточке клиента</a>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.getElementById('copyLinkBtn')?.addEventListener('click', function () {
+    var input = document.getElementById('portalLink');
+    if (!input) return;
+    input.select();
+    input.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(input.value).then(function () {
+        var btn = document.getElementById('copyLinkBtn');
+        var old = btn.textContent;
+        btn.textContent = 'Скопировано';
+        setTimeout(function () { btn.textContent = old; }, 2000);
+    });
+});
+</script>
 {% endblock %}

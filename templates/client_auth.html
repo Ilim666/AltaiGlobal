@@ -1,14 +1,27 @@
 {% extends "base.html" %}
+{% block title %}Вход в кабинет — AltaiGlobal{% endblock %}
 {% block content %}
-<div class="container mt-5">
-    <h2>Вход клиента по токену</h2>
+<div class="container mt-5" style="max-width: 480px;">
+    <div class="text-center mb-4">
+        <img src="{{ url_for('static', filename='logo-header.png') }}" alt="AltaiGlobal"
+             class="img-fluid mb-2" style="max-height: 80px;">
+        <img src="{{ url_for('static', filename='logo-altai-global.png') }}" alt="АЛТАЙ GLOBAL"
+             class="img-fluid" style="max-height: 48px;">
+    </div>
+    <h2 class="text-center h4 mb-3">Клиентский кабинет</h2>
     {% if error %}
-        <div class="alert alert-danger">{{ error }}</div>
+    <div class="alert alert-danger">{{ error }}</div>
     {% endif %}
-    <form method="post">
-        <label class="form-label">Введите токен</label>
-        <input type="text" name="token" maxlength="6" class="form-control" required>
-        <button class="btn btn-success mt-3" type="submit">Войти</button>
-    </form>
+    <div class="alert alert-info small">
+        Перейдите по ссылке, которую вам отправил менеджер. Если ссылка не открывается — запросите новую.
+    </div>
+    <details class="mb-3">
+        <summary class="small text-muted" style="cursor:pointer">Ввести код вручную (старый способ)</summary>
+        <form method="post" class="mt-3">
+            <label class="form-label">Код доступа</label>
+            <input type="text" name="token" class="form-control" autocomplete="off">
+            <button class="btn btn-success mt-3 w-100" type="submit">Войти</button>
+        </form>
+    </details>
 </div>
 {% endblock %}

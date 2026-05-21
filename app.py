@@ -782,34 +782,39 @@ def admin_delete_user(user_id):
     return redirect(url_for("admin_users"))
 
 
+def _sale_remaining_debt(sale):
+    total = sale.total if sale.total is not None else (sale.price_per_liter or 0) * (sale.liters or 0)
+    paid = sale.payment_amount or 0
+    return max(Decimal("0"), _to_decimal_2(total) - _to_decimal_2(paid))
+
+
 @app.route("/client-dashboard")
 def client_dashboard():
     if session.get("role") != "client":
         return redirect(url_for("client_auth"))
     client_id = session.get("client_id")
+    client = Client.query.filter_by(id=client_id, is_deleted=False).first_or_404()
     cars = Car.query.filter_by(client_id=client_id, is_deleted=False).order_by(Car.number.asc()).all()
     sales = (
-        Sale.query.join(Car)
+        Sale.query.options(joinedload(Sale.car))
+        .join(Car)
         .filter(Car.client_id == client_id, Car.is_deleted.is_(False))
         .order_by(Sale.created_at.desc())
         .all()
     )
+    debt_sales = [sale for sale in sales if _sale_remaining_debt(sale) > 0]
     payments = (
         Payment.query.filter_by(client_id=client_id)
         .options(joinedload(Payment.sale))
         .order_by(Payment.created_at.desc())
         .all()
     )
-
-    def calc_debt(sale):
-        total = sale.total if sale.total is not None else (sale.price_per_liter or 0) * (sale.liters or 0)
-        paid = sale.payment_amount or 0
-        return max(Decimal("0"), _to_decimal_2(total) - _to_decimal_2(paid))
-
-    total_debt = sum((calc_debt(sale) for sale in sales), Decimal("0"))
+    total_debt = sum((_sale_remaining_debt(sale) for sale in sales), Decimal("0"))
     return render_template(
         "client_dashboard.html",
+        client=client,
         sales=sales,
+        debt_sales=debt_sales,
         payments=payments,
         cars=cars,
         total_debt=float(total_debt),

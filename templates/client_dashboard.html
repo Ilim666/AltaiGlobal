@@ -1,90 +1,169 @@
 {% extends "base.html" %}
+{% block title %}Личный кабинет — AltaiGlobal{% endblock %}
+{% block extra_head %}
+<style>
+    .client-portal { max-width: 960px; margin: 0 auto; }
+    .client-portal-header {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        padding-bottom: 1.25rem;
+        margin-bottom: 1.5rem;
+        border-bottom: 2px solid #e9ecef;
+    }
+    .client-portal-logos {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .client-portal-logos img { object-fit: contain; }
+    .client-logo-ag { max-height: 72px; width: auto; }
+    .client-logo-brand { max-height: 52px; width: auto; max-width: 220px; }
+    .client-portal-profile {
+        text-align: right;
+        min-width: 200px;
+    }
+    .client-section {
+        margin-bottom: 2rem;
+    }
+    .client-section h2 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
 {% block content %}
-<div class="container py-3">
+<div class="client-portal py-3">
 
-    <h2 class="text-center mt-4">Ваши машины</h2>
-    {% if cars %}
-    <ul class="list-group mb-4">
-        {% for car in cars %}
-        <li class="list-group-item">
-            <b>Номер:</b> {{ car.number }},
-            <b>Марка:</b> {{ car.brand }},
-            <b>Цвет:</b> {{ car.color }}
-        </li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <div class="alert alert-info">У вас пока нет машин.</div>
-    {% endif %}
+    <header class="client-portal-header">
+        <div class="client-portal-logos">
+            <img src="{{ url_for('static', filename='logo-header.png') }}"
+                 alt="AltaiGlobal" class="client-logo-ag">
+            <img src="{{ url_for('static', filename='logo-altai-global.png') }}"
+                 alt="АЛТАЙ GLOBAL" class="client-logo-brand">
+        </div>
+        <div class="client-portal-profile">
+            <div class="fw-bold fs-5">{{ client.fio }}</div>
+            <div class="text-muted small mt-1">Тел: {{ client.phone | fmt_phone }}</div>
+            <div class="text-muted small">ИНН: {{ client.inn }}</div>
+            <div class="mt-2 fw-semibold {% if total_debt > 0 %}text-danger{% else %}text-success{% endif %}">
+                Общий долг: {{ total_debt|fmt_money }}
+            </div>
+            <form class="mt-2" action="{{ url_for('client_logout') }}" method="post">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Выйти</button>
+            </form>
+        </div>
+    </header>
 
-    <h2 class="mb-4 text-center">Ваши покупки</h2>
-    {% if sales %}
+    <section class="client-section">
+        <h2>Ваши долги</h2>
+        <p class="text-muted small mb-3">Продажи с непогашенным остатком</p>
+        {% if debt_sales %}
+        <div class="row g-3">
+            {% for sale in debt_sales %}
+            {% set paid = sale.payment_amount or 0 %}
+            {% set sum = sale.total if sale.total is not none else (sale.price_per_liter or 0) * (sale.liters or 0) %}
+            {% set remaining = sum - paid %}
+            <div class="col-12">
+                <div class="card shadow-sm border-danger">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between flex-wrap gap-2 mb-2">
+                            <span class="small text-muted">{{ sale.created_at|dt_kz if sale.created_at else '-' }}</span>
+                            <span class="badge bg-danger">{{ remaining|fmt_money }}</span>
+                        </div>
+                        <b>Машина:</b> {{ sale.car.number if sale.car else '-' }}<br>
+                        <b>Объём:</b> {{ sale.liters or 0 }} л ·
+                        <b>Сумма:</b> {{ sum|fmt_money }} ·
+                        <b>Оплачено:</b> {{ paid|fmt_money }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-success mb-0">Нет непогашенных долгов.</div>
+        {% endif %}
+    </section>
+
+    <section class="client-section">
+        <h2>Ваши покупки</h2>
+        <p class="text-muted small mb-3">Все продажи по вашим машинам</p>
+        {% if sales %}
         <div class="row g-3">
             {% for sale in sales %}
             {% set paid = sale.payment_amount or 0 %}
             {% set sum = sale.total if sale.total is not none else (sale.price_per_liter or 0) * (sale.liters or 0) %}
             {% set remaining = sum - paid %}
             <div class="col-12">
-                <div class="card shadow-sm {% if remaining > 0 %}border-danger{% else %}border-success{% endif %}">
+                <div class="card shadow-sm {% if remaining > 0 %}border-warning{% else %}border-success{% endif %}">
                     <div class="card-body">
-                        <div class="mb-2 small text-muted">
-                            {{ sale.created_at|dt_kz if sale.created_at else '-' }}
-                        </div>
-                        <div>
-                            <b>Машина:</b> {{ sale.car.number if sale.car else '-' }}<br>
-                            <b>Объём:</b> {{ sale.liters or 0 }} л<br>
-                            <b>Цена за литр:</b> {{ sale.price_per_liter|fmt_money }}<br>
-                            <b>Сумма:</b> {{ sum|fmt_money }}<br>
-                            <b>Оплачено:</b> {{ paid|fmt_money }}<br>
-                        </div>
-                        <div class="mt-2">
-                            <b>Остаток:</b>
-                            {% if remaining <= 0 %}
-                                <span class="badge bg-success">Нет долга</span>
-                            {% else %}
-                                <span class="badge bg-danger">{{ remaining|fmt_money }}</span>
-                            {% endif %}
-                        </div>
+                        <div class="mb-2 small text-muted">{{ sale.created_at|dt_kz if sale.created_at else '-' }}</div>
+                        <b>Машина:</b> {{ sale.car.number if sale.car else '-' }}<br>
+                        <b>Объём:</b> {{ sale.liters or 0 }} л<br>
+                        <b>Цена за литр:</b> {{ sale.price_per_liter|fmt_money }}<br>
+                        <b>Сумма:</b> {{ sum|fmt_money }}<br>
+                        <b>Оплачено:</b> {{ paid|fmt_money }}<br>
+                        <b>Остаток:</b>
+                        {% if remaining <= 0 %}
+                            <span class="badge bg-success">Погашено</span>
+                        {% else %}
+                            <span class="badge bg-danger">{{ remaining|fmt_money }}</span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
-        <div class="col-12 mt-3">
-            <div class="card card-body bg-light text-end fs-5 fw-bold">
-              Общий долг:
-              {% if total_debt > 0 %}
-                <span class="text-danger">{{ total_debt|fmt_money }}</span>
-              {% else %}
-                <span class="text-success">0 сом</span>
-              {% endif %}
-            </div>
-        </div>
-    {% else %}
-        <div class="alert alert-info text-center mb-4">Покупок пока нет.</div>
-    {% endif %}
+        {% else %}
+        <div class="alert alert-info mb-0">Покупок пока нет.</div>
+        {% endif %}
+    </section>
 
-    <h2 class="my-4 text-center">Ваши оплаты</h2>
-    {% if payments %}
+    <section class="client-section">
+        <h2>Ваши оплаты</h2>
+        {% if payments %}
         <div class="row g-3">
             {% for pay in payments %}
             <div class="col-12">
-                <div class="card card-body">
-                    <b>Дата:</b> {{ pay.created_at|dt_kz if pay.created_at else '-' }}<br>
-                    <b>Сумма:</b> {{ pay.amount|fmt_money }}<br>
-                    {% if pay.payment_method %}
-                    <b>Способ:</b> {{ pay.payment_method|capitalize }}<br>
-                    {% endif %}
+                <div class="card shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="small text-muted mb-1">{{ pay.created_at|dt_kz if pay.created_at else '-' }}</div>
+                        <b>Сумма:</b> {{ pay.amount|fmt_money }}
+                        {% if pay.payment_method %} · <b>Способ:</b> {{ pay.payment_method|capitalize }}{% endif %}
+                        {% if pay.sale and pay.sale.car %}
+                        · <b>Машина:</b> {{ pay.sale.car.number }}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% endfor %}
         </div>
-    {% else %}
-        <div class="alert alert-info text-center">Оплат пока нет.</div>
-    {% endif %}
+        {% else %}
+        <div class="alert alert-info mb-0">Оплат пока нет.</div>
+        {% endif %}
+    </section>
 
-    <form class="mt-4 text-center" action="{{ url_for('client_logout') }}" method="post">
-      <button type="submit" class="btn btn-lg btn-outline-secondary w-100 py-2">Выйти</button>
-    </form>
+    <section class="client-section">
+        <h2>Ваши машины</h2>
+        {% if cars %}
+        <ul class="list-group shadow-sm">
+            {% for car in cars %}
+            <li class="list-group-item">
+                <b>{{ car.number }}</b> — {{ car.brand }}, {{ car.color }}
+                {% if car.note %}<span class="text-muted small">({{ car.note }})</span>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="alert alert-info mb-0">У вас пока нет машин.</div>
+        {% endif %}
+    </section>
+
 </div>
 {% endblock %}

@@ -153,9 +153,10 @@ def csrf_protect():
     ensure_csrf_token()
     if validate_csrf_token():
         return
+    ensure_csrf_token()
     if request.path.startswith("/api/") or request.is_json:
-        return jsonify({"ok": False, "error": "Сессия истекла. Обновите страницу."}), 403
-    flash("Сессия истекла. Повторите действие.", "danger")
+        return jsonify({"ok": False, "error": "Обновите страницу и повторите действие."}), 403
+    flash("Не удалось отправить форму. Обновите страницу и попробуйте снова.", "warning")
     return redirect(request.referrer or url_for("index"))
 
 
@@ -1404,9 +1405,9 @@ def sales():
 
         if not errors and form["payment_method"] != "долг" and payment_amount is not None:
             expected_total = _to_decimal_2(Decimal(str(liters)) * price)
-            if payment_amount != expected_total:
+            if payment_amount > expected_total:
                 errors["payment_amount"] = (
-                    f"Сумма оплаты должна совпадать с итогом ({expected_total})."
+                    f"Сумма оплаты не может превышать итог ({expected_total})."
                 )
 
         if not errors:
@@ -1857,8 +1858,8 @@ def edit_sale(sale_id):
                 raise ValueError("Неверный способ оплаты")
 
             total = _to_decimal_2(liters * price)
-            if payment_method != "долг" and payment_amount != total:
-                raise ValueError("Сумма оплаты должна совпадать с итогом продажи")
+            if payment_method != "долг" and payment_amount > total:
+                raise ValueError("Сумма оплаты не может превышать итог продажи")
 
             sale.liters = liters
             sale.price_per_liter = price

@@ -71,7 +71,7 @@
                         <select class="form-select {% if errors.payment_method %}is-invalid{% endif %}"
                                 name="payment_method" id="payment_method_select">
                             {% for m in payment_methods %}
-                            <option value="{{ m }}" {% if (form.payment_method or 'долг') == m %}selected{% endif %}>
+                            <option value="{{ m }}" {% if (form.payment_method or 'наличка') == m %}selected{% endif %}>
                                 {{ m|capitalize }}
                             </option>
                             {% endfor %}
@@ -119,29 +119,51 @@ document.addEventListener('DOMContentLoaded', function () {
     var totalDisplay = document.getElementById('total_display');
     var paymentSelect = document.getElementById('payment_method_select');
     var paymentAmountBlock = document.getElementById('payment_amount_block');
+    var paymentAmountInput = document.getElementById('payment_amount_input');
 
-    // Auto-calculate total
     function calcTotal() {
         var l = parseFloat(litersInput.value);
         var p = parseFloat(priceInput.value);
         if (!isNaN(l) && !isNaN(p) && l > 0 && p > 0) {
-            totalDisplay.value = (l * p).toFixed(2);
-        } else {
-            totalDisplay.value = '';
+            return (l * p).toFixed(2);
+        }
+        return '';
+    }
+
+    function refreshTotal() {
+        totalDisplay.value = calcTotal();
+    }
+
+    function fillPaymentFromTotal() {
+        var total = calcTotal();
+        if (total && paymentSelect.value !== 'долг') {
+            paymentAmountInput.value = total;
         }
     }
-    litersInput.addEventListener('input', calcTotal);
-    priceInput.addEventListener('input', calcTotal);
 
-    // Show/hide payment amount based on method
-    paymentSelect.addEventListener('change', function () {
-        if (this.value === 'долг') {
+    function togglePaymentBlock() {
+        if (paymentSelect.value === 'долг') {
             paymentAmountBlock.style.display = 'none';
-            document.getElementById('payment_amount_input').value = '';
+            paymentAmountInput.value = '';
         } else {
             paymentAmountBlock.style.display = '';
+            if (!paymentAmountInput.value) {
+                fillPaymentFromTotal();
+            }
         }
+    }
+
+    litersInput.addEventListener('input', function () {
+        refreshTotal();
+        if (paymentSelect.value !== 'долг') fillPaymentFromTotal();
     });
+    priceInput.addEventListener('input', function () {
+        refreshTotal();
+        if (paymentSelect.value !== 'долг') fillPaymentFromTotal();
+    });
+    paymentSelect.addEventListener('change', togglePaymentBlock);
+    togglePaymentBlock();
+    refreshTotal();
 
     // Car number autocomplete
     var debounceTimer;

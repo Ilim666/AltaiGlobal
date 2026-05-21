@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
     <title>{% block title %}AltaiGlobal{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     {% block extra_head %}{% endblock %}
@@ -91,8 +92,7 @@
             <span class="nav-section-label">Долги</span>
             <a class="nav-link {% if request.path == '/debts-journal' %}active{% endif %}" href="/debts-journal">📋 Журнал долгов</a>
             {% if session.get("role") in ["admin", "operator"] %}
-                <a class="nav-link {% if request.path == '/debts-by-client' %}active{% endif %}" href="/debts-by-client">💰 Долги по клиентам
-                </a>
+                <a class="nav-link {% if request.path == '/debts-by-client' %}active{% endif %}" href="/debts-by-client">💰 Долги по клиентам</a>
             {% endif %}
 
             <span class="nav-section-label">Оплаты</span>
@@ -118,6 +118,20 @@
 {% else %}
     <main class="main-content">
 {% endif %}
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="mb-3">
+            {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
         {% block content %}{% endblock %}
     </main>
 {% if session.get("user_id") %}
@@ -126,8 +140,22 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 {% block extra_scripts %}{% endblock %}
 <script>
-// Enter key navigation between form fields (forward) / Shift+Enter (backward)
 document.addEventListener('DOMContentLoaded', function () {
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+    if (csrfToken) {
+        document.querySelectorAll('form').forEach(function (form) {
+            var method = (form.getAttribute('method') || 'get').toLowerCase();
+            if (method !== 'post') return;
+            if (form.querySelector('input[name="csrf_token"]')) return;
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'csrf_token';
+            input.value = csrfToken;
+            form.appendChild(input);
+        });
+    }
+
     document.querySelectorAll('form').forEach(function (form) {
         var fields = Array.from(form.querySelectorAll(
             'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select'
@@ -153,7 +181,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 e.preventDefault();
                 fields[idx + 1].focus();
             }
-            // last field: default Enter submits the form
         });
     });
 });

@@ -22,6 +22,10 @@
             <input type="number" step="0.01" name="price_per_liter" value="{{ sale.price_per_liter }}" class="form-control" required>
         </div>
         <div class="mb-3">
+            <label class="form-label">Итоговая сумма</label>
+            <input type="text" class="form-control bg-light" value="{{ sale.total }}" readonly>
+        </div>
+        <div class="mb-3">
             <label class="form-label">Сумма оплаты</label>
             <input type="number" step="0.01" name="payment_amount" value="{{ sale.payment_amount or '' }}" class="form-control">
         </div>

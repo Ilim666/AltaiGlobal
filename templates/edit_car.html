@@ -88,9 +88,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var currentRequest = ++requestId;
         try {
+            var headers = { 'Content-Type': 'application/json' };
+            var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            if (csrfMeta) {
+                headers['X-CSRF-Token'] = csrfMeta.getAttribute('content');
+            }
             var response = await fetch('/api/check-car-number', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers,
                 body: JSON.stringify({ car_number: number, car_id: carId })
             });
             if (!response.ok || currentRequest !== requestId) return;

@@ -126,9 +126,14 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const postJSON = async function (url, payload) {
+        const headers = { 'Content-Type': 'application/json' };
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        if (csrfMeta) {
+            headers['X-CSRF-Token'] = csrfMeta.getAttribute('content');
+        }
         const response = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify(payload)
         });
         if (!response.ok) throw new Error('request_failed');
@@ -254,6 +259,11 @@ document.addEventListener('DOMContentLoaded', function () {
     phoneInput.addEventListener('input', validatePhone);
     innInput.addEventListener('input', validateInn);
     carNumberInput.addEventListener('input', validateCarNumber);
+
+    if (fioInput.value.trim()) validateFio();
+    if (phoneInput.value.trim()) validatePhone();
+    if (innInput.value.trim()) validateInn();
+    if (carNumberInput.value.trim()) validateCarNumber();
 
     form.addEventListener('submit', function (e) {
         if (hasError.fio || hasError.phone || hasError.inn || hasError.car_number) {

@@ -33,7 +33,14 @@
 
                 <div class="mb-3">
                     <label for="monthInput" class="form-label">Месяц и год:</label>
-                    <input type="month" class="form-control" id="monthInput" name="month" value="{{ default_month }}" required>
+                    <select class="form-select" id="monthInput" name="month" required>
+                        {% for option in month_options %}
+                        <option value="{{ option.value }}" {% if option.value == default_month %}selected{% endif %}>
+                            {{ option.label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Те же периоды, что в журналах: текущий и предыдущий месяц.</div>
                 </div>
 
                 <button type="button" class="btn btn-primary" id="showBtn">Показать</button>

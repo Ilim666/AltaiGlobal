@@ -403,6 +403,22 @@ def _month_bounds(month_value=None):
     return month_start, month_end, month_start.strftime("%Y-%m")
 
 
+def _journal_month_bounds():
+    """Текущий и предыдущий календарные месяцы для журналов."""
+    today = datetime.now(TZ).date()
+    current_start = today.replace(day=1)
+    previous_start = (current_start - timedelta(days=1)).replace(day=1)
+    next_month_start = (current_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    current_end = next_month_start - timedelta(days=1)
+    return previous_start, current_end
+
+
+def _journal_period_label(start_date, end_date):
+    if start_date.replace(day=1) == end_date.replace(day=1):
+        return _month_label(start_date)
+    return f"{_month_label(start_date)} — {_month_label(end_date)}"
+
+
 def _month_label(month_start):
     months_ru = [
         "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
@@ -1599,28 +1615,38 @@ def _build_sales_report_payload(start_date, end_date):
     start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
     sales = (
         Sale.query
-        .options(joinedload(Sale.car).joinedload(Car.client))
+        .options(
+            joinedload(Sale.car).joinedload(Car.client),
+            joinedload(Sale.created_by_user),
+        )
         .join(Sale.car)
         .join(Car.client)
-        .filter(Sale.created_at >= start_dt, Sale.created_at < end_dt)
+        .filter(
+            Sale.created_at >= start_dt,
+            Sale.created_at < end_dt,
+            Car.is_deleted.is_(False),
+            Client.is_deleted.is_(False),
+        )
         .order_by(Sale.created_at.desc())
         .all()
     )
     rows = []
     for sale in sales:
-        payment_amount = _format_number(sale.payment_amount)
+        payment_amount = _format_number(sale.payment_amount) if sale.payment_amount is not None else None
         total = _format_number(sale.total)
+        remaining = _format_number(total - (payment_amount or 0))
         rows.append(
             {
-                "date": sale.created_at.strftime("%d.%m.%Y %H:%M"),
+                "date": sale.created_at.astimezone(TZ).strftime("%d.%m.%Y %H:%M"),
                 "client": sale.car.client.fio,
                 "car_number": sale.car.number,
                 "liters": _format_number(sale.liters),
                 "price_per_liter": _format_number(sale.price_per_liter),
                 "total": total,
-                "payment_amount": payment_amount if sale.payment_amount is not None else "—",
+                "payment_amount": payment_amount if payment_amount is not None else "—",
                 "payment_method": sale.payment_method or "—",
-                "remaining": _format_number(total - payment_amount),
+                "operator": sale.created_by_user.username if sale.created_by_user else "—",
+                "remaining": remaining,
                 "note": sale.note or "—",
             }
         )
@@ -1631,10 +1657,11 @@ def _build_sales_report_payload(start_date, end_date):
             {"key": "car_number", "label": "Номер машины"},
             {"key": "liters", "label": "Литры"},
             {"key": "price_per_liter", "label": "Цена / л"},
-            {"key": "total", "label": "Сумма"},
-            {"key": "payment_amount", "label": "Сумма оплаты"},
+            {"key": "total", "label": "Сумма, сом"},
+            {"key": "payment_amount", "label": "Оплата, сом"},
             {"key": "payment_method", "label": "Способ оплаты"},
-            {"key": "remaining", "label": "Остаток суммы"},
+            {"key": "operator", "label": "Оператор"},
+            {"key": "remaining", "label": "Остаток, сом"},
             {"key": "note", "label": "Примечание"},
         ],
         "rows": rows,
@@ -1645,7 +1672,11 @@ def _build_payments_report_payload(start_date, end_date):
     start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
     payments_data = (
         Payment.query
-        .options(joinedload(Payment.sale).joinedload(Sale.car), joinedload(Payment.client))
+        .options(
+            joinedload(Payment.sale).joinedload(Sale.car),
+            joinedload(Payment.client),
+            joinedload(Payment.paid_by_user),
+        )
         .join(Payment.client)
         .filter(Payment.created_at >= start_dt, Payment.created_at < end_dt)
         .order_by(Payment.created_at.desc())
@@ -1655,18 +1686,20 @@ def _build_payments_report_payload(start_date, end_date):
     for payment in payments_data:
         sale = payment.sale
         remaining = _format_number((sale.total - (sale.payment_amount or 0)) if sale else 0)
+        payment_method = payment.payment_method or (sale.payment_method if sale else None)
         rows.append(
             {
-                "sale_date": sale.created_at.strftime("%d.%m.%Y %H:%M") if sale else "—",
+                "sale_date": sale.created_at.astimezone(TZ).strftime("%d.%m.%Y %H:%M") if sale else "—",
                 "client": payment.client.fio,
                 "car_number": sale.car.number if sale and sale.car else "—",
                 "liters": _format_number(sale.liters) if sale else "—",
                 "price_per_liter": _format_number(sale.price_per_liter) if sale else "—",
                 "total": _format_number(sale.total) if sale else "—",
                 "payment_amount": _format_number(payment.amount),
-                "payment_method": payment.payment_method or (sale.payment_method if sale else "—"),
+                "payment_method": payment_method or "—",
+                "operator": payment.paid_by_user.username if payment.paid_by_user else "—",
                 "remaining": remaining,
-                "payment_date": payment.created_at.strftime("%d.%m.%Y %H:%M"),
+                "payment_date": payment.created_at.astimezone(TZ).strftime("%d.%m.%Y %H:%M"),
             }
         )
     return {
@@ -1679,6 +1712,7 @@ def _build_payments_report_payload(start_date, end_date):
             {"key": "total", "label": "Сумма"},
             {"key": "payment_amount", "label": "Сумма оплаты"},
             {"key": "payment_method", "label": "Способ оплаты"},
+            {"key": "operator", "label": "Оператор"},
             {"key": "remaining", "label": "Остаток суммы"},
             {"key": "payment_date", "label": "Дата и время оплаты"},
         ],
@@ -1954,7 +1988,8 @@ def _report_excel_file(report_type, month_start, payload):
 @app.route("/sales-journal")
 @login_required
 def sales_journal():
-    start_date, end_date, _ = _month_bounds()
+    start_date, end_date = _journal_month_bounds()
+    period_label = _journal_period_label(start_date, end_date)
     start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
     q = request.args.get("q", "").strip()
     query = (
@@ -1977,7 +2012,12 @@ def sales_journal():
             )
         )
     all_sales = query.order_by(Sale.created_at.desc()).all()
-    return render_template("sales_journal.html", sales=all_sales, q=q)
+    return render_template(
+        "sales_journal.html",
+        sales=all_sales,
+        q=q,
+        period_label=period_label,
+    )
 
 
 @app.route("/edit-sale/<int:sale_id>", methods=["GET", "POST"])
@@ -2183,12 +2223,16 @@ def pay_debt(sale_id):
 @app.route("/payments")
 @login_required
 def payments():
-    start_date, end_date, _ = _month_bounds()
+    start_date, end_date = _journal_month_bounds()
+    period_label = _journal_period_label(start_date, end_date)
     start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
     q = request.args.get("q", "").strip()
     query = (
         Payment.query
-        .options(joinedload(Payment.paid_by_user))
+        .options(
+            joinedload(Payment.paid_by_user),
+            joinedload(Payment.sale).joinedload(Sale.car),
+        )
         .join(Payment.client)
         .filter(Payment.created_at >= start_dt, Payment.created_at < end_dt)
         .order_by(Payment.created_at.desc())
@@ -2196,24 +2240,43 @@ def payments():
     if q:
         query = query.filter(Client.fio.ilike(f"%{q}%"))
     all_payments = query.all()
-    return render_template("payments.html", payments=all_payments, q=q)
+    return render_template(
+        "payments.html",
+        payments=all_payments,
+        q=q,
+        period_label=period_label,
+    )
 
 
 @app.route("/cash")
 @login_required
 def cash():
-    start_date, end_date, _ = _month_bounds()
+    start_date, end_date = _journal_month_bounds()
+    period_label = _journal_period_label(start_date, end_date)
     rows = _build_cash_rows(start_date, end_date)
-    return render_template("cash.html", rows=rows)
+    return render_template("cash.html", rows=rows, period_label=period_label)
 
 
 @app.route("/reports")
 @login_required
 def reports():
-    _, _, default_month = _month_bounds()
+    today = datetime.now(TZ).date()
+    current_start = today.replace(day=1)
+    previous_start = (current_start - timedelta(days=1)).replace(day=1)
+    month_options = [
+        {
+            "value": current_start.strftime("%Y-%m"),
+            "label": _month_label(current_start),
+        },
+        {
+            "value": previous_start.strftime("%Y-%m"),
+            "label": _month_label(previous_start),
+        },
+    ]
     return render_template(
         "reports.html",
-        default_month=default_month,
+        default_month=current_start.strftime("%Y-%m"),
+        month_options=month_options,
         report_type_labels=REPORT_TYPE_LABELS,
         can_view_turnover=session.get("role") == "admin",
     )
@@ -2263,7 +2326,8 @@ def export_report():
 @app.route("/turnover")
 @admin_required
 def turnover():
-    start_date, end_date, _ = _month_bounds()
+    start_date, end_date = _journal_month_bounds()
+    period_label = _journal_period_label(start_date, end_date)
     rows_data, totals, error_message = _build_turnover_rows(start_date, end_date)
 
     return render_template(
@@ -2273,6 +2337,7 @@ def turnover():
         error_message=error_message,
         start_date=start_date.isoformat() if start_date else "",
         end_date=end_date.isoformat() if end_date else "",
+        period_label=period_label,
     )
 
 

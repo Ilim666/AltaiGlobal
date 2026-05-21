@@ -6,6 +6,12 @@
     <h2 class="mb-0">💵 Касса</h2>
 </div>
 
+{% if period_label %}
+<div class="alert alert-secondary py-2 mb-3">
+    Период: <strong>{{ period_label }}</strong> (текущий и предыдущий месяц)
+</div>
+{% endif %}
+
 {% if rows %}
 <div class="table-responsive">
     <table class="table table-bordered table-hover align-middle text-nowrap">

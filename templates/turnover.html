@@ -30,7 +30,11 @@
                 </div>
                 <div class="col-12 col-md-6">
                     <div class="alert alert-secondary mb-0 py-2">
-                        Отображается только текущий месяц.
+                        {% if period_label %}
+                        Период: <strong>{{ period_label }}</strong> (текущий и предыдущий месяц)
+                        {% else %}
+                        Текущий и предыдущий месяц.
+                        {% endif %}
                     </div>
                 </div>
             </div>

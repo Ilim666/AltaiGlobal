@@ -6,6 +6,12 @@
     <a href="/debts-journal" class="btn btn-outline-secondary">📊 Журнал долгов</a>
 </div>
 
+{% if period_label %}
+<div class="alert alert-secondary py-2 mb-3">
+    Период: <strong>{{ period_label }}</strong> (текущий и предыдущий месяц)
+</div>
+{% endif %}
+
 <form method="get" action="/payments" class="mb-4">
     <div class="input-group">
         <input type="text" name="q" class="form-control"

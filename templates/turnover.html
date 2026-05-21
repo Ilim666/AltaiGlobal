@@ -79,7 +79,7 @@
                         {% if row.date is string %}
                             {{ row.date }}
                         {% elif row.date %}
-                            {{ row.date.strftime('%d.%m.%Y') }}
+                            {{ row.date_label if row.date_label is defined else row.date.strftime('%d.%m.%Y') }}
                         {% else %}
                             —
                         {% endif %}

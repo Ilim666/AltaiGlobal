@@ -58,21 +58,42 @@ SESSION_IDLE_EXEMPT_ENDPOINTS = frozenset(
     {"static", "login", "client_auth", "client_portal_login", "idle_logout"}
 )
 
-def fmt_dt_local(dt):
+def _to_local_datetime(dt):
     if not dt:
-        return "-"
-    return dt.astimezone(TZ).strftime('%d.%m.%Y %H:%M')
+        return None
+    if dt.tzinfo is None:
+        return TZ.localize(dt)
+    return dt.astimezone(TZ)
 
-app.jinja_env.filters['dt_kz'] = fmt_dt_local
+
+def fmt_dt_local(dt):
+    local_dt = _to_local_datetime(dt)
+    if not local_dt:
+        return "-"
+    return local_dt.strftime("%d.%m.%Y %H:%M")
+
+
+app.jinja_env.filters["dt_kz"] = fmt_dt_local
 
 
 def fmt_dt_local_input(dt):
-    if not dt:
+    local_dt = _to_local_datetime(dt)
+    if not local_dt:
         return ""
-    return dt.astimezone(TZ).strftime("%Y-%m-%dT%H:%M")
+    return local_dt.strftime("%Y-%m-%dT%H:%M")
 
 
 app.jinja_env.filters["dt_local_input"] = fmt_dt_local_input
+
+
+def fmt_dt_local_date(dt):
+    local_dt = _to_local_datetime(dt)
+    if not local_dt:
+        return "-"
+    return local_dt.strftime("%d.%m.%Y")
+
+
+app.jinja_env.filters["dt_kz_date"] = fmt_dt_local_date
 
 
 def fmt_phone(phone):
@@ -467,7 +488,14 @@ def _to_decimal_2(value):
 
 
 def _month_datetime_bounds(start_date, end_date):
-    return datetime.combine(start_date, time.min), datetime.combine(end_date + timedelta(days=1), time.min)
+    start_local = TZ.localize(datetime.combine(start_date, time.min))
+    end_local = TZ.localize(datetime.combine(end_date + timedelta(days=1), time.min))
+    return start_local, end_local
+
+
+def _local_date(dt):
+    local_dt = _to_local_datetime(dt)
+    return local_dt.date() if local_dt else None
 
 
 def _ensure_daily_stock_tables():
@@ -829,7 +857,7 @@ def clients():
 @admin_required
 def delete_sale(id):
     sale = Sale.query.filter_by(id=id).first_or_404()
-    sale_date = sale.created_at.astimezone(TZ).date() if sale.created_at else datetime.now(TZ).date()
+    sale_date = _local_date(sale.created_at) or datetime.now(TZ).date()
     liters = sale.liters or 0
     db.session.delete(sale)
     _adjust_daily_stock(liters, sale_date)
@@ -1526,10 +1554,18 @@ def receipts():
         .all()
     )
     query = Receipt.query.options(joinedload(Receipt.car).joinedload(Car.client))
-    if start_date:
-        query = query.filter(Receipt.created_at >= datetime.combine(start_date, time.min))
-    if end_date:
-        query = query.filter(Receipt.created_at < datetime.combine(end_date + timedelta(days=1), time.min))
+    if start_date and end_date:
+        min_dt, max_dt = _month_datetime_bounds(start_date, end_date)
+        query = query.filter(Receipt.created_at >= min_dt, Receipt.created_at < max_dt)
+    elif start_date:
+        query = query.filter(
+            Receipt.created_at >= TZ.localize(datetime.combine(start_date, time.min))
+        )
+    elif end_date:
+        query = query.filter(
+            Receipt.created_at
+            < TZ.localize(datetime.combine(end_date + timedelta(days=1), time.min))
+        )
     all_receipts = query.order_by(Receipt.created_at.desc()).all()
 
     return render_template(
@@ -1547,7 +1583,7 @@ def receipts():
 @admin_required
 def delete_receipt(receipt_id):
     receipt = Receipt.query.get_or_404(receipt_id)
-    receipt_date = receipt.created_at.astimezone(TZ).date() if receipt.created_at else datetime.now(TZ).date()
+    receipt_date = _local_date(receipt.created_at) or datetime.now(TZ).date()
     liters = receipt.liters or 0
     db.session.delete(receipt)
     _adjust_daily_stock(-Decimal(str(liters)), receipt_date)
@@ -1700,7 +1736,7 @@ def _build_sales_report_payload(start_date, end_date):
         remaining = _format_number(total - (payment_amount or 0))
         rows.append(
             {
-                "date": sale.created_at.astimezone(TZ).strftime("%d.%m.%Y %H:%M"),
+                "date": fmt_dt_local(sale.created_at),
                 "client": sale.car.client.fio,
                 "car_number": sale.car.number,
                 "liters": _format_number(sale.liters),
@@ -1756,7 +1792,7 @@ def _build_payments_report_payload(start_date, end_date):
         payment_method = payment.payment_method or (sale.payment_method if sale else None)
         rows.append(
             {
-                "sale_date": sale.created_at.astimezone(TZ).strftime("%d.%m.%Y %H:%M") if sale else "—",
+                "sale_date": fmt_dt_local(sale.created_at) if sale else "—",
                 "client": payment.client.fio,
                 "car_number": sale.car.number if sale and sale.car else "—",
                 "liters": _format_number(sale.liters) if sale else "—",
@@ -1766,7 +1802,7 @@ def _build_payments_report_payload(start_date, end_date):
                 "payment_method": payment_method or "—",
                 "operator": payment.paid_by_user.username if payment.paid_by_user else "—",
                 "remaining": remaining,
-                "payment_date": payment.created_at.astimezone(TZ).strftime("%d.%m.%Y %H:%M"),
+                "payment_date": fmt_dt_local(payment.created_at),
             }
         )
     return {
@@ -1797,10 +1833,9 @@ def _build_cash_rows(start_date, end_date):
     )
     daily = {}
     for payment in all_payments:
-        created_at = payment.created_at
-        if created_at.tzinfo is None:
-            created_at = TZ.localize(created_at)
-        date_key = created_at.astimezone(TZ).date()
+        date_key = _local_date(payment.created_at)
+        if not date_key:
+            continue
         if date_key not in daily:
             daily[date_key] = {
                 "date": date_key.strftime("%d.%m.%Y"),
@@ -1857,53 +1892,48 @@ def _build_cash_report_payload(start_date, end_date):
 
 def _build_turnover_rows(start_date, end_date):
     _ensure_daily_stock_tables()
-    sale_day = func.date(Sale.created_at)
-    payment_method = func.lower(func.coalesce(Sale.payment_method, ""))
     min_dt, max_dt = _month_datetime_bounds(start_date, end_date)
-
-    sales_query = db.session.query(
-        sale_day.label("sale_date"),
-        func.coalesce(func.sum(Sale.liters), 0).label("liters"),
-        func.coalesce(func.sum(Sale.total), 0).label("amount"),
-        func.coalesce(
-            func.sum(
-                case(
-                    (payment_method == DEBT_PAYMENT_TYPE, 0),
-                    else_=func.coalesce(Sale.payment_amount, 0),
-                )
-            ),
-            0,
-        ).label("payments"),
-        func.coalesce(func.sum(Sale.total - func.coalesce(Sale.payment_amount, 0)), 0).label("debts"),
-    ).filter(Sale.created_at >= min_dt, Sale.created_at < max_dt)
 
     rows_data = []
     totals = {"liters": 0.0, "amount": 0.0, "payments": 0.0, "debts": 0.0, "average_price": 0.0}
     error_message = None
 
     try:
-        grouped_sales = sales_query.group_by(sale_day).order_by(sale_day.desc()).all()
         sales_by_day = {}
-        for row in grouped_sales:
-            row_date = _coerce_day(row.sale_date)
+        for sale in Sale.query.filter(
+            Sale.created_at >= min_dt,
+            Sale.created_at < max_dt,
+        ).all():
+            row_date = _local_date(sale.created_at)
             if not row_date:
                 continue
-            liters = float(row.liters or 0)
-            amount = float(row.amount or 0)
-            payments = float(row.payments or 0)
-            debts = float(row.debts or 0)
+            if row_date not in sales_by_day:
+                sales_by_day[row_date] = {
+                    "liters": 0.0,
+                    "amount": 0.0,
+                    "payments": 0.0,
+                    "debts": 0.0,
+                }
+            liters = float(sale.liters or 0)
+            amount = float(sale.total or 0)
+            paid = float(sale.payment_amount or 0)
+            sales_by_day[row_date]["liters"] += liters
+            sales_by_day[row_date]["amount"] += amount
+            if (sale.payment_method or "").lower() != DEBT_PAYMENT_TYPE:
+                sales_by_day[row_date]["payments"] += paid
+            sales_by_day[row_date]["debts"] += max(0.0, amount - paid)
+
+        for row_date, daily_sales in sales_by_day.items():
+            liters = daily_sales["liters"]
+            amount = daily_sales["amount"]
+            payments = daily_sales["payments"]
+            debts = daily_sales["debts"]
             average_price = amount / liters if liters else 0.0
             totals["liters"] += liters
             totals["amount"] += amount
             totals["payments"] += payments
             totals["debts"] += debts
-            sales_by_day[row_date] = {
-                "liters": liters,
-                "amount": amount,
-                "payments": payments,
-                "debts": debts,
-                "average_price": average_price,
-            }
+            sales_by_day[row_date]["average_price"] = average_price
 
         additions_by_day = {
             _coerce_day(row.stock_date): float(row.added_liters or 0)
@@ -2106,7 +2136,7 @@ def edit_sale(sale_id):
     if request.method == "POST":
         try:
             old_liters = _to_decimal_2(sale.liters)
-            old_date = sale.created_at.astimezone(TZ).date() if sale.created_at else datetime.now(TZ).date()
+            old_date = _local_date(sale.created_at) or datetime.now(TZ).date()
 
             liters = _to_decimal_2(request.form["liters"])
             price = _to_decimal_2(request.form["price_per_liter"])
@@ -2130,7 +2160,7 @@ def edit_sale(sale_id):
             if parsed_created_at:
                 sale.created_at = parsed_created_at
 
-            new_date = sale.created_at.astimezone(TZ).date() if sale.created_at else datetime.now(TZ).date()
+            new_date = _local_date(sale.created_at) or datetime.now(TZ).date()
             _adjust_daily_stock(old_liters, old_date)
             _adjust_daily_stock(-liters, new_date)
             _sync_sale_payments_after_edit(sale)

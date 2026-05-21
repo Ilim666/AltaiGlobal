@@ -74,7 +74,7 @@
                 <td>{{ car.brand }}</td>
                 <td>{{ car.color }}</td>
                 <td>{{ car.note or '—' }}</td>
-                <td>{{ car.created_at.strftime('%d.%m.%Y') }}</td>
+                <td>{{ car.created_at|dt_kz_date }}</td>
                 <td>
                     {% if session.get('role') == 'admin' %}
                     <a href="/edit-car/{{ car.id }}" class="btn btn-sm btn-outline-warning">✏️</a>

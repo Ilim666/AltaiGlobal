@@ -50,7 +50,7 @@
             {% for p in payments %}
             {% set remaining = ((p.sale.total - (p.sale.payment_amount or 0)) | float) if p.sale else 0 %}
             <tr>
-                <td>{{ p.sale.created_at.strftime('%d.%m.%Y %H:%M') if p.sale else '—' }}</td>
+                <td>{{ p.sale.created_at|dt_kz if p.sale else '—' }}</td>
                 <td>
                     <a href="/client/{{ p.client.id }}" class="text-decoration-none">
                         {{ p.client.fio }}

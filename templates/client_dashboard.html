@@ -2,14 +2,13 @@
 {% block content %}
 <div class="container py-3">
 
-    <!-- Список машин клиента -->
     <h2 class="text-center mt-4">Ваши машины</h2>
     {% if cars %}
     <ul class="list-group mb-4">
         {% for car in cars %}
         <li class="list-group-item">
             <b>Номер:</b> {{ car.number }},
-            <b>Бренд:</b> {{ car.brand }},
+            <b>Марка:</b> {{ car.brand }},
             <b>Цвет:</b> {{ car.color }}
         </li>
         {% endfor %}
@@ -28,27 +27,23 @@
             <div class="col-12">
                 <div class="card shadow-sm {% if remaining > 0 %}border-danger{% else %}border-success{% endif %}">
                     <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="mb-2 small text-muted">
-                                    {{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '-' }}
-                                </div>
-                                <div>
-                                    <b>Машина:</b> {{ sale.car.number if sale.car else '-' }}<br>
-                                    <b>Объем:</b> {{ sale.liters or 0 }} л<br>
-                                    <b>Цена за литр:</b> {{ "%.2f"|format(sale.price_per_liter or 0) }} ₽<br>
-                                    <b>Сумма:</b> {{ "%.2f"|format(sum) }} ₽<br>
-                                    <b>Оплачено:</b> {{ "%.2f"|format(paid) }} ₽<br>
-                                </div>
-                                <div>
-                                    <b>Остаток:</b>
-                                    {% if remaining <= 0 %}
-                                        <span class="badge bg-success">Нет долга</span>
-                                    {% else %}
-                                        <span class="badge bg-danger">{{ "%.2f"|format(remaining) }} ₽</span>
-                                    {% endif %}
-                                </div>
-                            </div>
+                        <div class="mb-2 small text-muted">
+                            {{ sale.created_at|dt_kz if sale.created_at else '-' }}
+                        </div>
+                        <div>
+                            <b>Машина:</b> {{ sale.car.number if sale.car else '-' }}<br>
+                            <b>Объём:</b> {{ sale.liters or 0 }} л<br>
+                            <b>Цена за литр:</b> {{ sale.price_per_liter|fmt_money }}<br>
+                            <b>Сумма:</b> {{ sum|fmt_money }}<br>
+                            <b>Оплачено:</b> {{ paid|fmt_money }}<br>
+                        </div>
+                        <div class="mt-2">
+                            <b>Остаток:</b>
+                            {% if remaining <= 0 %}
+                                <span class="badge bg-success">Нет долга</span>
+                            {% else %}
+                                <span class="badge bg-danger">{{ remaining|fmt_money }}</span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -59,9 +54,9 @@
             <div class="card card-body bg-light text-end fs-5 fw-bold">
               Общий долг:
               {% if total_debt > 0 %}
-                <span class="text-danger">{{ "%.2f"|format(total_debt) }} ₽</span>
+                <span class="text-danger">{{ total_debt|fmt_money }}</span>
               {% else %}
-                <span class="text-success">0 ₽</span>
+                <span class="text-success">0 сом</span>
               {% endif %}
             </div>
         </div>
@@ -75,15 +70,11 @@
             {% for pay in payments %}
             <div class="col-12">
                 <div class="card card-body">
-                    <div>
-                        <b>Дата:</b>
-                        {{ pay.created_at.strftime('%d.%m.%Y %H:%M') if pay.created_at else '-' }}<br>
-                        <b>Сумма:</b>
-                        {{ "%.2f"|format(pay.amount or 0) }} ₽<br>
-                        {% if pay.payment_method %}
-                        <b>Способ:</b> {{ pay.payment_method|capitalize }}<br>
-                        {% endif %}
-                    </div>
+                    <b>Дата:</b> {{ pay.created_at|dt_kz if pay.created_at else '-' }}<br>
+                    <b>Сумма:</b> {{ pay.amount|fmt_money }}<br>
+                    {% if pay.payment_method %}
+                    <b>Способ:</b> {{ pay.payment_method|capitalize }}<br>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}

@@ -71,7 +71,7 @@
                         <select class="form-select {% if errors.payment_method %}is-invalid{% endif %}"
                                 name="payment_method" id="payment_method_select">
                             {% for m in payment_methods %}
-                            <option value="{{ m }}" {% if (form.payment_method or 'наличка') == m %}selected{% endif %}>
+                            <option value="{{ m }}" {% if (form.payment_method or 'долг') == m %}selected{% endif %}>
                                 {{ m|capitalize }}
                             </option>
                             {% endfor %}

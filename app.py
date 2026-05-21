@@ -72,6 +72,18 @@ def fmt_phone(phone):
 app.jinja_env.filters["fmt_phone"] = fmt_phone
 
 
+def fmt_money(value):
+    if value is None or value == "":
+        return "—"
+    try:
+        return f"{float(value):.2f} сом"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+app.jinja_env.filters["fmt_money"] = fmt_money
+
+
 def ensure_csrf_token():
     if "csrf_token" not in session:
         session["csrf_token"] = secrets.token_urlsafe(32)
@@ -199,7 +211,7 @@ class Car(db.Model):
     receipts = db.relationship("Receipt", backref="car", lazy=True)
 
 
-PAYMENT_METHODS = ["наличка", "безнал", "доллар", "долг"]
+PAYMENT_METHODS = ["долг", "наличка", "безнал", "доллар"]
 
 
 class Sale(db.Model):

@@ -3,38 +3,38 @@
 {% block content %}
 <div class="container mt-5">
     <div class="row justify-content-center">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
 
-                    <!-- ВЕРХНЕЕ ЛОГО -->
-                    <div class="text-center mb-3">
-                        <img src="{{ url_for('static', filename='logo-header1.png') }}" alt="Логотип" style="max-width:450px; max-height:350px;">
+                    <div class="text-center mb-4">
+                        <img src="{{ url_for('static', filename='logo-header.png') }}"
+                             alt="AltaiGlobal"
+                             class="img-fluid d-block mx-auto"
+                             style="max-height: 140px; width: auto; object-fit: contain;">
                     </div>
-                    <h3 class="card-title text-center">Вход в систему</h3>
+                    <h3 class="card-title text-center mb-4">Вход в систему</h3>
                     {% if error %}
                     <div class="alert alert-danger">{{ error }}</div>
                     {% endif %}
                     <form method="POST">
                         <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}">
-                        <div class="form-group mb-3">
-                            <label for="username">Имя пользователя</label>
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Имя пользователя</label>
                             <input type="text" id="username" name="username" class="form-control" required>
                         </div>
-                        <div class="form-group mb-3">
-                            <label for="password">Пароль</label>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Пароль</label>
                             <input type="password" id="password" name="password" class="form-control" required>
                         </div>
                         <button type="submit" class="btn btn-primary w-100">Вход</button>
                     </form>
 
-                    <!-- НИЖНЕЕ ЛОГО -->
-                    <div class="text-center mt-4" style="background: #f8f9fa; border-radius: 10px; padding: 12px 0;">
-                        <img 
-                            src="{{ url_for('static', filename='logo-altai-global1.png') }}" 
-                            alt="АЛТАЙGLOBAL" 
-                            style="max-width:180px; width:100%; height:auto; object-fit: contain; box-shadow: 0 2px 12px #0001;"
-                        >
+                    <div class="text-center mt-4 pt-3" style="background: #f8f9fa; border-radius: 10px;">
+                        <img src="{{ url_for('static', filename='logo-altai-global.png') }}"
+                             alt="АЛТАЙ GLOBAL"
+                             class="img-fluid d-block mx-auto py-3"
+                             style="max-height: 80px; width: auto; max-width: 220px; object-fit: contain;">
                     </div>
                 </div>
             </div>

@@ -17,14 +17,22 @@
             padding: 1.5rem 1rem;
             flex-shrink: 0;
         }
-        .sidebar-title {
-            font-size: 1.3rem;
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-            color: #fff;
+        .sidebar-brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #374151;
             text-decoration: none;
-            display: block;
         }
+        .sidebar-brand img {
+            object-fit: contain;
+            max-width: 100%;
+        }
+        .sidebar-brand .logo-ag { max-height: 56px; width: auto; }
+        .sidebar-brand .logo-altai { max-height: 42px; width: auto; }
         .sidebar .nav-link {
             color: #d1d5db;
             border-radius: 0.5rem;
@@ -65,7 +73,12 @@
 {% if session.get("user_id") %}
 <div class="app-layout">
     <aside class="sidebar">
-        <a class="sidebar-title" href="/">🚗 AltaiGlobal</a>
+        <a href="/" class="sidebar-brand">
+            <img src="{{ url_for('static', filename='logo-header1.png') }}"
+                 alt="AltaiGlobal" class="logo-ag">
+            <img src="{{ url_for('static', filename='logo-altai-global1.png') }}"
+                 alt="АЛТАЙ GLOBAL" class="logo-altai">
+        </a>
         <div class="small text-light mb-3">
             {{ session.get("username") }} ({{ session.get("role") }})
             <div class="mt-2">
@@ -185,5 +198,22 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+{% if session.get('user_id') or session.get('role') == 'client' %}
+<script>
+(function () {
+    var idleLimitMs = {{ session_idle_minutes|default(10) }} * 60 * 1000;
+    var lastActivity = Date.now();
+    function touch() { lastActivity = Date.now(); }
+    ['click', 'keydown', 'scroll', 'mousemove', 'touchstart'].forEach(function (name) {
+        document.addEventListener(name, touch, { passive: true });
+    });
+    setInterval(function () {
+        if (Date.now() - lastActivity >= idleLimitMs) {
+            window.location.replace('{{ url_for("idle_logout") }}');
+        }
+    }, 15000);
+})();
+</script>
+{% endif %}
 </body>
 </html>

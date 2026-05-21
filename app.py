@@ -51,7 +51,12 @@ CLIENT_AUTH_MAX_ATTEMPTS = 5
 CLIENT_AUTH_WINDOW_SECONDS = 300
 _client_auth_attempts = {}
 
-CSRF_EXEMPT_ENDPOINTS = frozenset({"login", "client_auth", "client_portal_login", "static"})
+CSRF_EXEMPT_ENDPOINTS = frozenset({"login", "client_auth", "client_portal_login", "idle_logout", "static"})
+SESSION_IDLE_MINUTES = int(os.getenv("SESSION_IDLE_MINUTES", "10"))
+SESSION_IDLE_SECONDS = SESSION_IDLE_MINUTES * 60
+SESSION_IDLE_EXEMPT_ENDPOINTS = frozenset(
+    {"static", "login", "client_auth", "client_portal_login", "idle_logout"}
+)
 
 def fmt_dt_local(dt):
     if not dt:
@@ -119,6 +124,21 @@ def _reset_client_auth_rate_limit():
     _client_auth_attempts.pop(ip, None)
 
 
+def _session_is_authenticated():
+    return bool(session.get("user_id")) or session.get("role") == "client"
+
+
+def _update_session_activity():
+    session["last_activity"] = datetime.now(TZ).timestamp()
+
+
+def _session_idle_expired():
+    last_activity = session.get("last_activity")
+    if last_activity is None:
+        return False
+    return datetime.now(TZ).timestamp() - float(last_activity) > SESSION_IDLE_SECONDS
+
+
 def _release_client_unique_fields(client):
     stamp = int(datetime.now(TZ).timestamp())
     client.fio = f"{client.fio[:72]}__del{client.id}_{stamp}"[:100]
@@ -151,7 +171,27 @@ def _parse_local_datetime(value):
 def inject_csrf():
     if session.get("user_id") or session.get("role") == "client":
         ensure_csrf_token()
-    return {"csrf_token": session.get("csrf_token", "")}
+    return {
+        "csrf_token": session.get("csrf_token", ""),
+        "session_idle_minutes": SESSION_IDLE_MINUTES,
+    }
+
+
+@app.before_request
+def session_idle_timeout():
+    if request.endpoint in SESSION_IDLE_EXEMPT_ENDPOINTS:
+        return
+    if not _session_is_authenticated():
+        return
+    if _session_idle_expired():
+        was_client = session.get("role") == "client"
+        session.clear()
+        flash(
+            f"Вы вышли из системы: {SESSION_IDLE_MINUTES} минут бездействия.",
+            "warning",
+        )
+        return redirect(url_for("client_auth") if was_client else url_for("login"))
+    _update_session_activity()
 
 
 @app.before_request
@@ -694,6 +734,7 @@ def login():
             session["username"] = user.username
             session["role"] = user.role
             ensure_csrf_token()
+            _update_session_activity()
             return redirect(url_for("index"))
 
         error = "Неверное имя пользователя или пароль"
@@ -707,6 +748,17 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/idle-logout")
+def idle_logout():
+    was_client = session.get("role") == "client"
+    session.clear()
+    flash(
+        f"Вы вышли из системы: {SESSION_IDLE_MINUTES} минут бездействия.",
+        "warning",
+    )
+    return redirect(url_for("client_auth") if was_client else url_for("login"))
 
 
 @app.route("/")
@@ -996,6 +1048,7 @@ def _start_client_session(client):
     session["client_id"] = client.id
     session["role"] = "client"
     ensure_csrf_token()
+    _update_session_activity()
 
 
 @app.route("/client-cabinet/<token>")

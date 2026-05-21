@@ -36,16 +36,16 @@
                                 <div>
                                     <b>Машина:</b> {{ sale.car.number if sale.car else '-' }}<br>
                                     <b>Объем:</b> {{ sale.liters or 0 }} л<br>
-                                    <b>Цена за литр:</b> {{ "%.2f"|format(sale.price_per_liter or 0) }} сом<br>
-                                    <b>Сумма:</b> {{ "%.2f"|format(sum) }} сом<br>
-                                    <b>Оплачено:</b> {{ "%.2f"|format(paid) }} сом<br>
+                                    <b>Цена за литр:</b> {{ "%.2f"|format(sale.price_per_liter or 0) }} ₽<br>
+                                    <b>Сумма:</b> {{ "%.2f"|format(sum) }} ₽<br>
+                                    <b>Оплачено:</b> {{ "%.2f"|format(paid) }} ₽<br>
                                 </div>
                                 <div>
                                     <b>Остаток:</b>
                                     {% if remaining <= 0 %}
                                         <span class="badge bg-success">Нет долга</span>
                                     {% else %}
-                                        <span class="badge bg-danger">{{ "%.2f"|format(remaining) }} сом</span>
+                                        <span class="badge bg-danger">{{ "%.2f"|format(remaining) }} ₽</span>
                                     {% endif %}
                                 </div>
                             </div>
@@ -59,9 +59,9 @@
             <div class="card card-body bg-light text-end fs-5 fw-bold">
               Общий долг:
               {% if total_debt > 0 %}
-                <span class="text-danger">{{ "%.2f"|format(total_debt) }} сом</span>
+                <span class="text-danger">{{ "%.2f"|format(total_debt) }} ₽</span>
               {% else %}
-                <span class="text-success">0 сом</span>
+                <span class="text-success">0 ₽</span>
               {% endif %}
             </div>
         </div>
@@ -79,7 +79,7 @@
                         <b>Дата:</b>
                         {{ pay.created_at.strftime('%d.%m.%Y %H:%M') if pay.created_at else '-' }}<br>
                         <b>Сумма:</b>
-                        {{ "%.2f"|format(pay.amount or 0) }} сом<br>
+                        {{ "%.2f"|format(pay.amount or 0) }} ₽<br>
                         {% if pay.payment_method %}
                         <b>Способ:</b> {{ pay.payment_method|capitalize }}<br>
                         {% endif %}

@@ -1,79 +1,46 @@
 {% extends "base.html" %}
 {% block title %}Журнал долгов — AltaiGlobal{% endblock %}
 {% block content %}
-<div class="page-toolbar">
-    <h2>Журнал долгов</h2>
-    <div class="toolbar-actions">
-        <a href="/debts-by-client" class="btn btn-outline-primary btn-sm">Долги по клиентам</a>
-    </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">📋 Журнал долгов</h2>
+    <a href="/debts-by-client" class="btn btn-outline-secondary">💰 Долги по клиентам</a>
 </div>
 
-<form method="get" action="/debts-journal" class="filter-panel">
-    <div class="row g-2 align-items-center">
-        <div class="col-md-8 col-lg-9">
-            <input type="text" name="q" class="form-control"
-                   placeholder="Поиск по клиенту или номеру машины…"
-                   value="{{ q or '' }}">
-        </div>
-        <div class="col-md-4 col-lg-3 d-flex gap-2">
-            <button class="btn btn-primary flex-grow-1" type="submit">Найти</button>
-            {% if q or client_id %}
-            <a href="/debts-journal" class="btn btn-outline-secondary">Сброс</a>
-            {% endif %}
-        </div>
+<form method="get" action="/debts-journal" class="mb-4">
+    <div class="input-group">
+        <input type="text" name="q" class="form-control"
+               placeholder="Поиск по клиенту или номеру машины…"
+               value="{{ q or '' }}">
+        <button class="btn btn-outline-secondary" type="submit">🔍 Найти</button>
+        {% if q or client_id %}
+        <a href="/debts-journal" class="btn btn-outline-danger">✕ Сбросить</a>
+        {% endif %}
     </div>
     {% if client_id %}<input type="hidden" name="client_id" value="{{ client_id }}">{% endif %}
 </form>
 
 {% if client_id and sales %}
-<div class="alert alert-warning py-2 mb-3 border-0">
-    Фильтр: <strong>{{ sales[0].car.client.fio }}</strong>
-    <a href="/debts-journal" class="ms-2 alert-link">Показать все</a>
+<div class="alert alert-warning py-2 mb-3">
+    Показаны долги клиента: <strong>{{ sales[0].car.client.fio }}</strong>
+    <a href="/debts-journal" class="ms-2 btn btn-sm btn-outline-secondary">Показать все</a>
 </div>
 {% endif %}
 
 {% if sales %}
-{% set ns = namespace(count=0, total=0, paid=0, remain=0) %}
-{% for s in sales %}
-{% set paid_row = s.payment_amount or 0 %}
-{% set rem_row = s.total - paid_row %}
-{% set ns.count = ns.count + 1 %}
-{% set ns.total = ns.total + s.total %}
-{% set ns.paid = ns.paid + paid_row %}
-{% set ns.remain = ns.remain + rem_row %}
-{% endfor %}
-<div class="stats-row">
-    <div class="stat-card">
-        <div class="stat-label">Записей</div>
-        <div class="stat-value">{{ ns.count }}</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Сумма долгов</div>
-        <div class="stat-value">{{ "%.2f"|format(ns.total) }}</div>
-    </div>
-    <div class="stat-card stat-success">
-        <div class="stat-label">Оплачено</div>
-        <div class="stat-value">{{ "%.2f"|format(ns.paid) }}</div>
-    </div>
-    <div class="stat-card stat-danger">
-        <div class="stat-label">Остаток</div>
-        <div class="stat-value">{{ "%.2f"|format(ns.remain) }}</div>
-    </div>
-</div>
-
-<div class="data-card">
+<div class="card shadow-sm">
     <div class="table-responsive">
-        <table class="table data-table mb-0">
-            <thead>
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
                 <tr>
                     <th>Дата</th>
                     <th>Клиент</th>
-                    <th>Машина</th>
-                    <th class="col-num">Долг</th>
-                    <th class="col-num">Оплачено</th>
-                    <th class="col-num">Остаток</th>
+                    <th>Номер машины</th>
+                    <th>Сумма долга</th>
+                    <th>Оплачено</th>
+                    <th>Остаток</th>
+                    <th>Статус</th>
                     <th>Примечание</th>
-                    <th class="col-actions"></th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -81,20 +48,27 @@
             {% set paid = s.payment_amount or 0 %}
             {% set remaining = s.total - paid %}
             <tr>
-                <td class="col-date">{{ s.created_at|dt_kz }}</td>
+                <td>{{ s.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                 <td>
-                    <a href="/client/{{ s.car.client.id }}" class="client-link">
+                    <a href="/client/{{ s.car.client.id }}" class="text-decoration-none">
                         {{ s.car.client.fio }}
                     </a>
                 </td>
-                <td><span class="car-plate">{{ s.car.number }}</span></td>
-                <td class="col-num"><strong>{{ "%.2f"|format(s.total) }}</strong></td>
-                <td class="col-num">{{ "%.2f"|format(paid) }}</td>
-                <td class="col-num"><strong class="text-danger">{{ "%.2f"|format(remaining) }}</strong></td>
-                <td class="note-cell" title="{{ s.note or '' }}">{{ s.note or '—' }}</td>
-                <td class="col-actions">
+                <td><strong>{{ s.car.number }}</strong></td>
+                <td><strong>{{ "%.2f"|format(s.total) }}</strong></td>
+                <td>{{ "%.2f"|format(paid) }}</td>
+                <td><strong>{{ "%.2f"|format(remaining) }}</strong></td>
+                <td>
+                    {% if remaining <= 0 %}
+                        <span class="badge bg-success">Погашено</span>
+                    {% else %}
+                        <span class="badge bg-danger">Долг активен</span>
+                    {% endif %}
+                </td>
+                <td>{{ s.note or '—' }}</td>
+                <td>
                     {% if remaining > 0 %}
-                    <button type="button" class="btn btn-success btn-sm btn-pay"
+                    <button type="button" class="btn btn-sm btn-success"
                             data-bs-toggle="modal" data-bs-target="#payModal"
                             data-sale-id="{{ s.id }}"
                             data-remaining="{{ "%.2f"|format(remaining) }}"
@@ -102,8 +76,6 @@
                             data-client-id="{{ s.car.client.id }}">
                         Оплатить
                     </button>
-                    {% else %}
-                    <span class="badge bg-success badge-status">Погашено</span>
                     {% endif %}
                 </td>
             </tr>
@@ -113,51 +85,48 @@
     </div>
 </div>
 {% else %}
-<div class="alert alert-info border-0 shadow-sm">
+<div class="alert alert-info">
     {% if q %}
-    По запросу «{{ q }}» долгов не найдено. <a href="/debts-journal" class="alert-link">Показать все</a>.
+    По запросу «{{ q }}» долгов не найдено. <a href="/debts-journal">Показать все</a>.
     {% elif client_id %}
-    У этого клиента нет долгов. <a href="/debts-journal" class="alert-link">Показать все</a>.
+    У этого клиента нет долгов. <a href="/debts-journal">Показать все</a>.
     {% else %}
     Долгов пока нет.
     {% endif %}
 </div>
 {% endif %}
 
+<!-- Payment Modal -->
 <div class="modal fade" id="payModal" tabindex="-1" aria-labelledby="payModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold" id="payModalLabel">Оплата долга</h5>
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="payModalLabel">Оплата долга</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
             </div>
             <form method="post" id="payForm" action="">
-                <div class="modal-body pt-2">
-                    <div class="p-3 rounded mb-3" style="background:#f8fafc;">
-                        <div class="small text-muted">Клиент</div>
-                        <div class="fw-semibold" id="modalClient"></div>
-                        <div class="small text-muted mt-2">Остаток к оплате</div>
-                        <div class="fs-4 fw-bold text-danger" id="modalRemaining"></div>
-                    </div>
+                <div class="modal-body">
+                    <p class="mb-1">Клиент: <strong id="modalClient"></strong></p>
+                    <p class="mb-3">Остаток: <strong id="modalRemaining"></strong></p>
                     <div class="mb-3">
-                        <label for="payMethod" class="form-label fw-semibold">Способ оплаты</label>
+                        <label for="payMethod" class="form-label">Способ оплаты</label>
                         <select name="payment_method" id="payMethod" class="form-select" required>
-                            <option value="" disabled selected>Выберите…</option>
+                            <option value="" disabled selected>Выберите способ...</option>
                             <option value="наличка">Наличка</option>
                             <option value="безнал">Безнал</option>
                             <option value="доллар">Доллар</option>
                         </select>
                     </div>
-                    <div class="mb-0">
-                        <label for="payAmount" class="form-label fw-semibold">Сумма</label>
+                    <div class="mb-3">
+                        <label for="payAmount" class="form-label">Сумма оплаты</label>
                         <input type="number" step="0.01" min="0.01" name="amount"
-                               id="payAmount" class="form-control form-control-lg" required>
+                               id="payAmount" class="form-control" required>
                     </div>
                     <input type="hidden" name="client_id" id="modalClientId" value="">
                 </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-success px-4">Оплатить</button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success">Оплатить</button>
                 </div>
             </form>
         </div>
@@ -171,14 +140,16 @@ document.getElementById('payModal').addEventListener('show.bs.modal', function (
     var btn = event.relatedTarget;
     var saleId = btn.getAttribute('data-sale-id');
     var remaining = parseFloat(btn.getAttribute('data-remaining'));
-    document.getElementById('modalClient').textContent = btn.getAttribute('data-client');
-    document.getElementById('modalRemaining').textContent = btn.getAttribute('data-remaining') + ' сом';
+    var client = btn.getAttribute('data-client');
+    var client_id = btn.getAttribute('data-client-id');
+    document.getElementById('modalClient').textContent = client;
+    document.getElementById('modalRemaining').textContent = btn.getAttribute('data-remaining');
     var amountInput = document.getElementById('payAmount');
     amountInput.value = remaining;
     amountInput.max = remaining;
     document.getElementById('payMethod').value = '';
     document.getElementById('payForm').action = '/pay-debt/' + saleId;
-    document.getElementById('modalClientId').value = btn.getAttribute('data-client-id');
+    document.getElementById('modalClientId').value = client_id;
 });
 
 document.getElementById('payForm').addEventListener('submit', function (e) {
@@ -187,13 +158,13 @@ document.getElementById('payForm').addEventListener('submit', function (e) {
     var max = parseFloat(amountInput.max);
     if (isNaN(val) || val <= 0) {
         e.preventDefault();
-        amountInput.setCustomValidity('Введите корректную сумму.');
+        amountInput.setCustomValidity('Введите корректную сумму оплаты.');
         amountInput.reportValidity();
         return;
     }
     if (val > max) {
         e.preventDefault();
-        amountInput.setCustomValidity('Не больше остатка: ' + max);
+        amountInput.setCustomValidity('Сумма не может превышать остаток: ' + max);
         amountInput.reportValidity();
         return;
     }

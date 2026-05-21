@@ -3,124 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
     <title>{% block title %}AltaiGlobal{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"
-          integrity="sha384-geKY26fsSE0ktuca6Rnd0TiOvpFQKbvvUHvBb+JAJDsQm/M4Y92MeDrqLdOWO7frR" crossorigin="anonymous">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     {% block extra_head %}{% endblock %}
+    <style>
+        body { background-color: #f8f9fa; }
+        .app-layout { display: flex; min-height: 100vh; }
+        .sidebar {
+            width: 260px;
+            background: #1f2937;
+            color: #fff;
+            padding: 1.5rem 1rem;
+            flex-shrink: 0;
+        }
+        .sidebar-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: #fff;
+            text-decoration: none;
+            display: block;
+        }
+        .sidebar .nav-link {
+            color: #d1d5db;
+            border-radius: 0.5rem;
+            margin-bottom: 0.35rem;
+            padding: 0.6rem 0.9rem;
+            transition: all 0.2s ease;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            color: #fff;
+            background: #374151;
+        }
+        .nav-section-label {
+            color: #9ca3af;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.75rem 0.9rem 0.25rem;
+            display: block;
+        }
+        .main-content { flex: 1; padding: 2rem; }
+        .form-control.is-invalid,
+        .form-select.is-invalid {
+            background-color: #fff5f5;
+        }
+        .realtime-feedback {
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+            min-height: 1.2em;
+        }
+        @media (max-width: 768px) {
+            .app-layout { flex-direction: column; }
+            .sidebar { width: 100%; padding: 1rem; }
+            .main-content { padding: 1rem; }
+        }
+    </style>
 </head>
 <body>
 {% if session.get("user_id") %}
 <div class="app-layout">
-    <aside class="sidebar" id="appSidebar">
-        <a class="sidebar-title" href="/">AltaiGlobal</a>
-        <div class="sidebar-user">
-            <strong>{{ session.get("username") }}</strong><br>
-            <span>{{ session.get("role") }}</span>
+    <aside class="sidebar">
+        <a class="sidebar-title" href="/">🚗 AltaiGlobal</a>
+        <div class="small text-light mb-3">
+            {{ session.get("username") }} ({{ session.get("role") }})
             <div class="mt-2">
-                <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">Выход</a>
+                <a href="{{ url_for('logout') }}" class="btn btn-sm btn-danger">Выход</a>
             </div>
         </div>
-        <nav class="nav flex-column flex-grow-1">
+        <nav class="nav flex-column">
             <span class="nav-section-label">Клиенты</span>
-            <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">Клиенты</a>
+            <a class="nav-link {% if request.path == '/clients' %}active{% endif %}" href="/clients">👥 Список клиентов</a>
             {% if session.get("role") == "admin" %}
-            <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">+ Клиент</a>
+                <a class="nav-link {% if request.path == '/add-client' %}active{% endif %}" href="/add-client">➕ Добавить клиента</a>
             {% endif %}
+
             <span class="nav-section-label">Машины</span>
-            <a class="nav-link {% if request.path == '/cars' %}active{% endif %}" href="/cars">Машины</a>
+            <a class="nav-link {% if request.path == '/cars' %}active{% endif %}" href="/cars">🚗 Список машин</a>
             {% if session.get("role") == "admin" %}
-            <a class="nav-link {% if request.path == '/add-car' %}active{% endif %}" href="/add-car">+ Машина</a>
+                <a class="nav-link {% if request.path == '/add-car' %}active{% endif %}" href="/add-car">🚙 Добавить машину</a>
             {% endif %}
+
             <span class="nav-section-label">Продажи</span>
-            <a class="nav-link {% if request.path == '/sales' %}active{% endif %}" href="/sales">Продажа</a>
-            <a class="nav-link {% if request.path == '/sales-journal' %}active{% endif %}" href="/sales-journal">Журнал продаж</a>
+            <a class="nav-link {% if request.path == '/sales' %}active{% endif %}" href="/sales">⛽ Продажа</a>
+            <a class="nav-link {% if request.path == '/sales-journal' %}active{% endif %}" href="/sales-journal">📋 Журнал продаж</a>
+
             <span class="nav-section-label">Долги</span>
-            <a class="nav-link {% if request.path == '/debts-journal' %}active{% endif %}" href="/debts-journal">Журнал долгов</a>
-            <a class="nav-link {% if request.path == '/debts-by-client' %}active{% endif %}" href="/debts-by-client">По клиентам</a>
-            <span class="nav-section-label">Финансы</span>
-            <a class="nav-link {% if request.path == '/payments' %}active{% endif %}" href="/payments">Оплаты</a>
-            <a class="nav-link {% if request.path == '/cash' %}active{% endif %}" href="/cash">Касса</a>
-            <a class="nav-link {% if request.path == '/reports' %}active{% endif %}" href="/reports">Отчёты</a>
+            <a class="nav-link {% if request.path == '/debts-journal' %}active{% endif %}" href="/debts-journal">📋 Журнал долгов</a>
+            {% if session.get("role") in ["admin", "operator"] %}
+                <a class="nav-link {% if request.path == '/debts-by-client' %}active{% endif %}" href="/debts-by-client">💰 Долги по клиентам
+                </a>
+            {% endif %}
+
+            <span class="nav-section-label">Оплаты</span>
+            <a class="nav-link {% if request.path == '/payments' %}active{% endif %}" href="/payments">💳 Журнал оплат</a>
+            <a class="nav-link {% if request.path == '/cash' %}active{% endif %}" href="/cash">💵 Касса</a>
+            <a class="nav-link {% if request.path == '/reports' %}active{% endif %}" href="/reports">📊 Отчеты</a>
+
             {% if session.get("role") == "admin" %}
-            <span class="nav-section-label">Админ</span>
-            <a class="nav-link {% if request.path == '/turnover' %}active{% endif %}" href="{{ url_for('turnover') }}">Оборот</a>
-            <a class="nav-link {% if request.path.startswith('/admin/users') %}active{% endif %}" href="{{ url_for('admin_users') }}">Пользователи</a>
+                <hr class="my-3">
+                <div class="mb-3">
+                    <small class="text-muted d-block mb-2">АДМИНИСТРАТОР</small>
+                    <a class="nav-link {% if request.path == '/turnover' %}active{% endif %}" href="{{ url_for('turnover') }}">
+                        📈 Оборот
+                    </a>
+                    <a class="nav-link {% if request.path.startswith('/admin/users') %}active{% endif %}" href="{{ url_for('admin_users') }}">
+                        👥 Управление пользователями
+                    </a>
+                </div>
             {% endif %}
         </nav>
     </aside>
     <main class="main-content">
-        <button type="button" class="btn btn-dark btn-sm mobile-nav-toggle" id="sidebarToggle" aria-expanded="false" aria-controls="appSidebar">
-            Меню
-        </button>
 {% else %}
     <main class="main-content">
 {% endif %}
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        <div class="mb-3">
-            {% for category, message in messages %}
-            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show border-0 shadow-sm" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        {% endwith %}
-
         {% block content %}{% endblock %}
     </main>
 {% if session.get("user_id") %}
 </div>
 {% endif %}
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-fbbEygN63HXXEjHNxbrVmih6CE5SmcTanF+dEdc9zd03uv1M0mPaHdm+rZPd3kf"
-        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 {% block extra_scripts %}{% endblock %}
 <script>
+// Enter key navigation between form fields (forward) / Shift+Enter (backward)
 document.addEventListener('DOMContentLoaded', function () {
-    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
-    if (csrfToken) {
-        document.querySelectorAll('form').forEach(function (form) {
-            var method = (form.getAttribute('method') || 'get').toLowerCase();
-            if (method !== 'post') return;
-            if (form.querySelector('input[name="csrf_token"]')) return;
-            var input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'csrf_token';
-            input.value = csrfToken;
-            form.appendChild(input);
-        });
-    }
-
-    var sidebarToggle = document.getElementById('sidebarToggle');
-    var sidebar = document.getElementById('appSidebar');
-    if (sidebarToggle && sidebar) {
-        sidebarToggle.addEventListener('click', function () {
-            var open = sidebar.classList.toggle('is-open');
-            sidebarToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        });
-    }
-
-    document.querySelectorAll('form[data-keyboard-nav="1"]').forEach(function (form) {
+    document.querySelectorAll('form').forEach(function (form) {
         var fields = Array.from(form.querySelectorAll(
             'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select'
-        )).filter(function (el) { return !el.disabled && !el.readOnly; });
+        )).filter(function (el) { return !el.disabled; });
 
         form.addEventListener('keydown', function (e) {
-            if (e.key !== 'Enter' || e.shiftKey) return;
+            if (e.key !== 'Enter') return;
             var tag = e.target.tagName.toLowerCase();
             if (tag === 'textarea') return;
             if (tag !== 'input' && tag !== 'select') return;
+
             var idx = fields.indexOf(e.target);
+
+            if (e.shiftKey) {
+                if (idx > 0) {
+                    e.preventDefault();
+                    fields[idx - 1].focus();
+                }
+                return;
+            }
+
             if (idx > -1 && idx < fields.length - 1) {
                 e.preventDefault();
                 fields[idx + 1].focus();
             }
+            // last field: default Enter submits the form
         });
     });
 });

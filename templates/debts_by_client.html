@@ -1,64 +1,65 @@
 {% extends "base.html" %}
 {% block title %}Долги по клиентам — AltaiGlobal{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0">💰 Долги по клиентам</h2>
-    <a href="/debts-journal" class="btn btn-outline-secondary">📋 Журнал долгов</a>
+<div class="page-toolbar">
+    <h2>Долги по клиентам</h2>
+    <div class="toolbar-actions">
+        <a href="/debts-journal" class="btn btn-outline-secondary btn-sm">Журнал долгов</a>
+    </div>
 </div>
 
-<form method="get" action="/debts-by-client" class="mb-4">
-    <div class="input-group">
-        <input type="text" name="q" class="form-control"
-               placeholder="Поиск по клиенту…"
-               value="{{ q or '' }}">
-        <button class="btn btn-outline-secondary" type="submit">🔍 Найти</button>
-        {% if q %}
-        <a href="/debts-by-client" class="btn btn-outline-danger">✕ Сбросить</a>
-        {% endif %}
+<form method="get" action="/debts-by-client" class="filter-panel">
+    <div class="row g-2 align-items-center">
+        <div class="col-md-8 col-lg-9">
+            <input type="text" name="q" class="form-control" placeholder="Поиск по клиенту…" value="{{ q or '' }}">
+        </div>
+        <div class="col-md-4 col-lg-3 d-flex gap-2">
+            <button class="btn btn-primary flex-grow-1" type="submit">Найти</button>
+            {% if q %}
+            <a href="/debts-by-client" class="btn btn-outline-secondary">Сброс</a>
+            {% endif %}
+        </div>
     </div>
 </form>
 
 {% if rows %}
-<div class="card shadow-sm">
+<div class="data-card">
     <div class="table-responsive">
-        <table class="table table-hover mb-0">
-            <thead class="table-dark">
+        <table class="table data-table mb-0">
+            <thead>
                 <tr>
                     <th>Клиент</th>
                     <th>Телефон</th>
-                    <th>Кол-во долгов</th>
-                    <th>Остаток</th>
+                    <th class="col-num">Долгов</th>
+                    <th class="col-num">Остаток</th>
                 </tr>
             </thead>
             <tbody>
             {% for r in rows %}
             <tr>
                 <td>
-                    <a href="/debts-journal?client_id={{ r.client.id }}" class="text-decoration-none">
-                        {{ r.client.fio }}
-                    </a>
+                    <a href="/debts-journal?client_id={{ r.client.id }}" class="client-link">{{ r.client.fio }}</a>
                 </td>
                 <td>{{ r.client.phone | fmt_phone }}</td>
-                <td>{{ r.count }}</td>
-                <td><strong class="text-danger">{{ "%.2f"|format(r.remaining) }}</strong></td>
+                <td class="col-num">{{ r.count }}</td>
+                <td class="col-num"><strong class="text-danger">{{ "%.2f"|format(r.remaining) }}</strong></td>
             </tr>
             {% endfor %}
             </tbody>
-            <tfoot class="table-secondary fw-bold">
-                <tr>
-                    <td>ИТОГО</td>
-                    <td>—</td>
-                    <td>{{ totals.count }}</td>
-                    <td class="text-danger">{{ "%.2f"|format(totals.remaining) }}</td>
+            <tfoot>
+                <tr style="background:#f8fafc; font-weight:700;">
+                    <td colspan="2">Итого</td>
+                    <td class="col-num">{{ totals.count }}</td>
+                    <td class="col-num text-danger">{{ "%.2f"|format(totals.remaining) }}</td>
                 </tr>
             </tfoot>
         </table>
     </div>
 </div>
 {% else %}
-<div class="alert alert-info">
+<div class="alert alert-info border-0 shadow-sm">
     {% if q %}
-    По запросу «{{ q }}» клиентов с долгами не найдено. <a href="/debts-by-client">Показать все</a>.
+    По запросу «{{ q }}» ничего не найдено. <a href="/debts-by-client" class="alert-link">Показать все</a>.
     {% else %}
     Долгов пока нет.
     {% endif %}

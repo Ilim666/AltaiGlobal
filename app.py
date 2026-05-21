@@ -46,6 +46,18 @@ if not _secret:
 app.config["SECRET_KEY"] = _secret
 db = SQLAlchemy(app)
 TZ = pytz.timezone(os.getenv("TZ", "Asia/Bishkek"))
+UTC = pytz.UTC
+
+
+def _db_stores_utc_naive():
+    uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    return uri.startswith("postgresql")
+
+
+def _now_for_db():
+    if _db_stores_utc_naive():
+        return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(TZ).replace(tzinfo=None)
 
 CLIENT_AUTH_MAX_ATTEMPTS = 5
 CLIENT_AUTH_WINDOW_SECONDS = 300
@@ -61,9 +73,21 @@ SESSION_IDLE_EXEMPT_ENDPOINTS = frozenset(
 def _to_local_datetime(dt):
     if not dt:
         return None
-    if dt.tzinfo is None:
-        return TZ.localize(dt)
-    return dt.astimezone(TZ)
+    if dt.tzinfo is not None:
+        return dt.astimezone(TZ)
+    if _db_stores_utc_naive():
+        return UTC.localize(dt).astimezone(TZ)
+    return TZ.localize(dt)
+
+
+def _local_to_db_datetime(local_dt):
+    if local_dt.tzinfo is None:
+        local_dt = TZ.localize(local_dt)
+    else:
+        local_dt = local_dt.astimezone(TZ)
+    if _db_stores_utc_naive():
+        return local_dt.astimezone(UTC).replace(tzinfo=None)
+    return local_dt.replace(tzinfo=None)
 
 
 def fmt_dt_local(dt):
@@ -194,7 +218,7 @@ def _parse_local_datetime(value):
     if not value:
         return None
     naive = datetime.strptime(value, "%Y-%m-%dT%H:%M")
-    return TZ.localize(naive)
+    return _local_to_db_datetime(TZ.localize(naive))
 
 
 @app.context_processor
@@ -263,7 +287,7 @@ class User(db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="operator")
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
+    created_at = db.Column(db.DateTime, default=_now_for_db)
 
 
 class Client(db.Model):
@@ -273,7 +297,7 @@ class Client(db.Model):
     inn = db.Column(db.String(14), nullable=False)
     is_deleted = db.Column(db.Boolean, default=False, server_default=text("false"), nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
+    created_at = db.Column(db.DateTime, default=_now_for_db)
     cars = db.relationship("Car", backref="client", lazy=True)
     token = db.Column(db.String(64), unique=True)
 
@@ -291,7 +315,7 @@ class Car(db.Model):
     stock = db.Column(db.Numeric(10, 2), default=0)
     is_deleted = db.Column(db.Boolean, default=False, server_default=text("false"), nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
+    created_at = db.Column(db.DateTime, default=_now_for_db)
     sales = db.relationship("Sale", backref="car", lazy=True)
     receipts = db.relationship("Receipt", backref="car", lazy=True)
 
@@ -309,7 +333,7 @@ class Sale(db.Model):
     payment_amount = db.Column(db.Numeric(10, 2), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     note = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
+    created_at = db.Column(db.DateTime, default=_now_for_db)
     payments = db.relationship("Payment", backref="sale", lazy=True, cascade="all, delete-orphan")
     created_by_user = db.relationship("User", foreign_keys=[created_by], lazy="joined")
 
@@ -319,7 +343,7 @@ class Receipt(db.Model):
     car_id = db.Column(db.Integer, db.ForeignKey("car.id"), nullable=False)
     liters = db.Column(db.Numeric(10, 2), nullable=False)
     amount = db.Column(db.Numeric(10, 2), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
+    created_at = db.Column(db.DateTime, default=_now_for_db)
     notes = db.Column(db.Text, nullable=True)
 
 
@@ -327,14 +351,14 @@ class DailyStock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     stock_date = db.Column(db.Date, nullable=False, unique=True)
     current_stock = db.Column(db.Numeric(10, 2), default=0)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
+    created_at = db.Column(db.DateTime, default=_now_for_db)
 
 
 class StockHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     stock_date = db.Column(db.Date, nullable=False)
     added_liters = db.Column(db.Numeric(10, 2), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
+    created_at = db.Column(db.DateTime, default=_now_for_db)
 
 
 PAYMENT_TYPES = ["продажа", "долг"]
@@ -360,7 +384,7 @@ class Payment(db.Model):
     )
     payment_method = db.Column(db.String(20), nullable=True)
     paid_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(TZ))
+    created_at = db.Column(db.DateTime, default=_now_for_db)
     client = db.relationship("Client", backref=db.backref("payments", lazy=True))
     paid_by_user = db.relationship("User", foreign_keys=[paid_by], lazy="joined")
 
@@ -490,6 +514,11 @@ def _to_decimal_2(value):
 def _month_datetime_bounds(start_date, end_date):
     start_local = TZ.localize(datetime.combine(start_date, time.min))
     end_local = TZ.localize(datetime.combine(end_date + timedelta(days=1), time.min))
+    if _db_stores_utc_naive():
+        return (
+            start_local.astimezone(UTC).replace(tzinfo=None),
+            end_local.astimezone(UTC).replace(tzinfo=None),
+        )
     return start_local, end_local
 
 
@@ -1215,7 +1244,7 @@ def client_auth():
 @admin_required
 def delete_client(id):
     client = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
-    deleted_at = datetime.now(TZ)
+    deleted_at = _now_for_db()
     client.is_deleted = True
     client.deleted_at = deleted_at
     _release_client_unique_fields(client)
@@ -1348,7 +1377,7 @@ def delete_car(id):
     client_id = car.client_id
     next_page = request.form.get("next", "")
     car.is_deleted = True
-    car.deleted_at = datetime.now(TZ)
+    car.deleted_at = _now_for_db()
     _release_car_unique_fields(car)
     db.session.commit()
     if next_page == "cars":
@@ -1558,14 +1587,11 @@ def receipts():
         min_dt, max_dt = _month_datetime_bounds(start_date, end_date)
         query = query.filter(Receipt.created_at >= min_dt, Receipt.created_at < max_dt)
     elif start_date:
-        query = query.filter(
-            Receipt.created_at >= TZ.localize(datetime.combine(start_date, time.min))
-        )
+        min_dt, max_dt = _month_datetime_bounds(start_date, start_date)
+        query = query.filter(Receipt.created_at >= min_dt, Receipt.created_at < max_dt)
     elif end_date:
-        query = query.filter(
-            Receipt.created_at
-            < TZ.localize(datetime.combine(end_date + timedelta(days=1), time.min))
-        )
+        min_dt, max_dt = _month_datetime_bounds(end_date, end_date)
+        query = query.filter(Receipt.created_at >= min_dt, Receipt.created_at < max_dt)
     all_receipts = query.order_by(Receipt.created_at.desc()).all()
 
     return render_template(

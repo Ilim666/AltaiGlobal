@@ -46,7 +46,8 @@
             <tbody>
             {% for s in sales %}
             {% set paid = s.payment_amount or 0 %}
-            {% set remaining = s.total - paid %}
+            {% set remaining = (s.total - paid)|float %}
+            {% if remaining < 0 %}{% set remaining = 0 %}{% endif %}
             <tr>
                 <td>{{ s.created_at|dt_kz }}</td>
                 <td>

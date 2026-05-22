@@ -981,7 +981,10 @@ def _sale_remaining_debt(sale):
 
 def _recalculate_sale_payment_amount(sale):
     total_paid = sum(
-        (_to_decimal_2(payment.amount) for payment in sale.payments),
+        (
+            _to_decimal_2(payment.amount)
+            for payment in Payment.query.filter_by(sale_id=sale.id).all()
+        ),
         Decimal("0"),
     )
     sale.payment_amount = total_paid if total_paid > 0 else None
@@ -2240,7 +2243,6 @@ def debts_journal():
         .join(Sale.car)
         .join(Car.client)
         .filter(
-            (Sale.total - db.func.coalesce(Sale.payment_amount, 0.0)) > 0,
             Car.is_deleted.is_(False),
             Client.is_deleted.is_(False),
         )
@@ -2257,7 +2259,11 @@ def debts_journal():
             query = query.filter(Client.id == int(client_id))
         except ValueError:
             pass
-    all_debts = query.order_by(Sale.created_at.desc()).all()
+    all_debts = [
+        sale
+        for sale in query.order_by(Sale.created_at.desc()).all()
+        if _sale_remaining_debt(sale) > 0
+    ]
     return render_template("debts_journal.html", sales=all_debts, q=q, client_id=client_id)
 
 
@@ -2354,9 +2360,11 @@ def pay_debt(sale_id):
         paid_by=session.get("user_id"),
     )
     db.session.add(payment)
+    db.session.flush()
+    _recalculate_sale_payment_amount(sale)
     db.session.commit()
+    flash("Оплата долга принята.", "success")
 
-    # ГЛАВНОЕ ДОБАВЛЕНИЕ:
     client_id = request.form.get("client_id")
     if client_id:
         return redirect(url_for("debts_journal", client_id=client_id))

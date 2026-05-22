@@ -1937,29 +1937,38 @@ def _build_turnover_rows(start_date, end_date):
                 sales_by_day[row_date] = {
                     "liters": 0.0,
                     "amount": 0.0,
-                    "payments": 0.0,
-                    "debts": 0.0,
+                    "sale_ids": [],
                 }
-            liters = float(sale.liters or 0)
-            amount = float(sale.total or 0)
-            paid = float(sale.payment_amount or 0)
-            sales_by_day[row_date]["liters"] += liters
-            sales_by_day[row_date]["amount"] += amount
-            if (sale.payment_method or "").lower() != DEBT_PAYMENT_TYPE:
-                sales_by_day[row_date]["payments"] += paid
-            sales_by_day[row_date]["debts"] += max(0.0, amount - paid)
+            sales_by_day[row_date]["liters"] += float(sale.liters or 0)
+            sales_by_day[row_date]["amount"] += float(sale.total or 0)
+            sales_by_day[row_date]["sale_ids"].append(sale.id)
 
         for row_date, daily_sales in sales_by_day.items():
             liters = daily_sales["liters"]
             amount = daily_sales["amount"]
-            payments = daily_sales["payments"]
-            debts = daily_sales["debts"]
+            sale_ids = daily_sales["sale_ids"]
+            if sale_ids:
+                payments = float(
+                    db.session.query(func.coalesce(func.sum(Payment.amount), 0))
+                    .filter(Payment.sale_id.in_(sale_ids))
+                    .scalar()
+                    or 0
+                )
+            else:
+                payments = 0.0
+            debts = max(0.0, amount - payments)
             average_price = amount / liters if liters else 0.0
             totals["liters"] += liters
             totals["amount"] += amount
             totals["payments"] += payments
             totals["debts"] += debts
-            sales_by_day[row_date]["average_price"] = average_price
+            sales_by_day[row_date] = {
+                "liters": liters,
+                "amount": amount,
+                "payments": payments,
+                "debts": debts,
+                "average_price": average_price,
+            }
 
         additions_by_day = {
             _coerce_day(row.stock_date): float(row.added_liters or 0)

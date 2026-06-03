@@ -20,7 +20,7 @@ from flask import (
     url_for,
 )
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -487,6 +487,19 @@ def _journal_period_label(start_date, end_date):
     if start_date.replace(day=1) == end_date.replace(day=1):
         return _month_label(start_date)
     return f"{_month_label(start_date)} — {_month_label(end_date)}"
+
+
+def _apply_sales_period_filter(query):
+    """Погашенные — за 2 месяца; с непогашенным долгом — всегда."""
+    start_date, end_date = _journal_month_bounds()
+    start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
+    remaining_debt = Sale.total - db.func.coalesce(Sale.payment_amount, 0.0)
+    return query.filter(
+        or_(
+            and_(Sale.created_at >= start_dt, Sale.created_at < end_dt),
+            remaining_debt > 0,
+        )
+    )
 
 
 def _month_label(month_start):
@@ -1028,9 +1041,11 @@ def client_dashboard():
     client = Client.query.filter_by(id=client_id, is_deleted=False).first_or_404()
     cars = Car.query.filter_by(client_id=client_id, is_deleted=False).order_by(Car.number.asc()).all()
     sales = (
-        Sale.query.options(joinedload(Sale.car))
-        .join(Car)
-        .filter(Car.client_id == client_id, Car.is_deleted.is_(False))
+        _apply_sales_period_filter(
+            Sale.query.options(joinedload(Sale.car))
+            .join(Car)
+            .filter(Car.client_id == client_id, Car.is_deleted.is_(False))
+        )
         .order_by(Sale.created_at.desc())
         .all()
     )
@@ -2136,16 +2151,13 @@ def _report_excel_file(report_type, month_start, payload):
 def sales_journal():
     start_date, end_date = _journal_month_bounds()
     period_label = _journal_period_label(start_date, end_date)
-    start_dt, end_dt = _month_datetime_bounds(start_date, end_date)
     q = request.args.get("q", "").strip()
-    query = (
+    query = _apply_sales_period_filter(
         Sale.query
         .options(joinedload(Sale.car).joinedload(Car.client), joinedload(Sale.created_by_user))
         .join(Sale.car)
         .join(Car.client)
         .filter(
-            Sale.created_at >= start_dt,
-            Sale.created_at < end_dt,
             Car.is_deleted.is_(False),
             Client.is_deleted.is_(False),
         )

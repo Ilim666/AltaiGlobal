@@ -36,6 +36,37 @@
         padding-bottom: 0.5rem;
         border-bottom: 1px solid #dee2e6;
     }
+    .client-section-toggle {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #212529;
+        text-decoration: none;
+        padding: 0;
+        border: none;
+        border-bottom: 1px solid #dee2e6;
+        width: 100%;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0;
+        padding-bottom: 0.5rem;
+    }
+    .client-section-toggle:hover,
+    .client-section-toggle:focus {
+        color: #0d6efd;
+        box-shadow: none;
+    }
+    .client-section-toggle .chevron {
+        transition: transform 0.2s ease;
+        font-size: 0.9rem;
+    }
+    .client-section-toggle:not(.collapsed) .chevron {
+        transform: rotate(180deg);
+    }
+    .client-section-body {
+        padding-top: 1rem;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -97,8 +128,17 @@
     </section>
 
     <section class="client-section">
-        <h2>Ваши покупки</h2>
-        <p class="text-muted small mb-3">Все продажи по вашим машинам</p>
+        <button class="btn client-section-toggle collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#clientPurchases"
+                aria-expanded="false" aria-controls="clientPurchases">
+            <span>Ваши покупки</span>
+            <span class="chevron">▼</span>
+        </button>
+        <div class="collapse client-section-body" id="clientPurchases">
+        <p class="text-muted small mb-3">
+            Погашенные покупки — за текущий и предыдущий месяц.
+            С непогашенным долгом — за всё время.
+        </p>
         {% if sales %}
         <div class="row g-3">
             {% for sale in sales %}
@@ -128,10 +168,17 @@
         {% else %}
         <div class="alert alert-info mb-0">Покупок пока нет.</div>
         {% endif %}
+        </div>
     </section>
 
     <section class="client-section">
-        <h2>Ваши оплаты</h2>
+        <button class="btn client-section-toggle collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#clientPayments"
+                aria-expanded="false" aria-controls="clientPayments">
+            <span>Ваши оплаты</span>
+            <span class="chevron">▼</span>
+        </button>
+        <div class="collapse client-section-body" id="clientPayments">
         {% if payments %}
         <div class="row g-3">
             {% for pay in payments %}
@@ -152,10 +199,17 @@
         {% else %}
         <div class="alert alert-info mb-0">Оплат пока нет.</div>
         {% endif %}
+        </div>
     </section>
 
     <section class="client-section">
-        <h2>Ваши машины</h2>
+        <button class="btn client-section-toggle collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#clientCars"
+                aria-expanded="false" aria-controls="clientCars">
+            <span>Ваши машины</span>
+            <span class="chevron">▼</span>
+        </button>
+        <div class="collapse client-section-body" id="clientCars">
         {% if cars %}
         <ul class="list-group shadow-sm">
             {% for car in cars %}
@@ -168,6 +222,7 @@
         {% else %}
         <div class="alert alert-info mb-0">У вас пока нет машин.</div>
         {% endif %}
+        </div>
     </section>
 
 </div>

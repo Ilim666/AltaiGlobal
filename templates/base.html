@@ -52,7 +52,29 @@
             padding: 0.75rem 0.9rem 0.25rem;
             display: block;
         }
-        .main-content { flex: 1; padding: 2rem; }
+        .main-content { flex: 1; padding: 2rem; min-height: 0; }
+        /* Таблицы: шапка закреплена, прокручиваются только строки */
+        .main-content .table-responsive {
+            max-height: calc(100vh - 12rem);
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .main-content .table-responsive thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: #212529;
+            color: #fff;
+            box-shadow: 0 2px 2px rgba(0, 0, 0, 0.15);
+        }
+        .main-content .table-responsive tfoot th,
+        .main-content .table-responsive tfoot td {
+            position: sticky;
+            bottom: 0;
+            z-index: 9;
+            background-color: #e9ecef;
+            box-shadow: 0 -2px 2px rgba(0, 0, 0, 0.08);
+        }
         .form-control.is-invalid,
         .form-select.is-invalid {
             background-color: #fff5f5;

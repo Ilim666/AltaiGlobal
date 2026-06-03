@@ -8,14 +8,22 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     {% block extra_head %}{% endblock %}
     <style>
-        body { background-color: #f8f9fa; }
-        .app-layout { display: flex; min-height: 100vh; }
+        html, body { height: 100%; margin: 0; background-color: #f8f9fa; }
+        .app-layout {
+            display: flex;
+            height: 100vh;
+            min-height: 100vh;
+            overflow: hidden;
+        }
         .sidebar {
             width: 260px;
             background: #1f2937;
             color: #fff;
             padding: 1.5rem 1rem;
             flex-shrink: 0;
+            height: 100vh;
+            overflow-y: auto;
+            align-self: stretch;
         }
         .sidebar-brand {
             display: flex;
@@ -52,13 +60,53 @@
             padding: 0.75rem 0.9rem 0.25rem;
             display: block;
         }
-        .main-content { flex: 1; padding: 2rem; min-height: 0; }
-        /* Таблицы: шапка закреплена, прокручиваются только строки */
-        .main-content .table-responsive {
-            max-height: calc(100vh - 12rem);
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            height: 100vh;
+            overflow: hidden;
+            padding: 1.25rem 2rem 1rem;
+        }
+        .main-content > h1,
+        .main-content > h2,
+        .main-content > .d-flex,
+        .main-content > .alert,
+        .main-content > form,
+        .main-content > p,
+        .main-content > #reportError,
+        .main-content > #tableContainer > h5 {
+            flex-shrink: 0;
+        }
+        /* Карточка/блок с таблицей растягивается на всю оставшуюся высоту */
+        .main-content > .card:has(.table-responsive),
+        .main-content > .table-responsive,
+        .main-content #tableContainer:has(.table-responsive) {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 0;
+        }
+        .main-content > .card:has(.table-responsive) .table-responsive,
+        .main-content > .table-responsive,
+        .main-content #tableContainer .table-responsive {
+            flex: 1 1 auto;
+            min-height: 0;
             overflow: auto;
             -webkit-overflow-scrolling: touch;
         }
+        .main-content:not(:has(.table-responsive)) {
+            overflow-y: auto;
+        }
+        body:not(:has(.app-layout)) .main-content {
+            height: auto;
+            min-height: 100vh;
+            display: block;
+            overflow: visible;
+        }
+        /* Таблицы: шапка закреплена, прокручиваются только строки */
         .main-content .table-responsive thead th {
             position: sticky;
             top: 0;
@@ -85,9 +133,26 @@
             min-height: 1.2em;
         }
         @media (max-width: 768px) {
-            .app-layout { flex-direction: column; }
-            .sidebar { width: 100%; padding: 1rem; }
-            .main-content { padding: 1rem; }
+            .app-layout {
+                flex-direction: column;
+                height: auto;
+                min-height: 100vh;
+                overflow: visible;
+            }
+            .sidebar {
+                width: 100%;
+                height: auto;
+                padding: 1rem;
+            }
+            .main-content {
+                height: auto;
+                overflow: visible;
+                padding: 1rem;
+            }
+            .main-content > .card:has(.table-responsive) .table-responsive,
+            .main-content > .table-responsive {
+                max-height: 70vh;
+            }
         }
     </style>
 </head>
